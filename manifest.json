@@ -1,0 +1,16 @@
+{
+  "name": "Forge",
+  "short_name": "Forge",
+  "display": "standalone",
+  "background_color": "#12141a",
+  "theme_color": "#4fc3f7",
+  "start_url": "/Forge/",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

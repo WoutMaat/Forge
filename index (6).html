@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4fc3f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Forge">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-40 -40 80 80'><polygon points='0,-36 31,-18 31,18 0,36 -31,18 -31,-18' fill='%231a1d25' stroke='%234fc3f7' stroke-width='2'/><polyline points='-16,10 -6,-8 4,4 14,-18 24,-8' fill='none' stroke='%234fc3f7' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/><circle cx='24' cy='-8' r='3' fill='%234fc3f7'/></svg>">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#12141a;--bg2:#1a1d25;--bg3:#22262f;--bg4:#2a2f3b;--accent:#4fc3f7;--accent2:#29b6f6;--text:#e8eaf0;--text2:#8b92a8;--text3:#4a5168;--green:#4caf7d;--red:#f06060;--border:#252a38;--fn:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fn);font-size:14px}
+body{display:flex;flex-direction:column}
+.setup{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px}
+.sbox{width:480px;max-width:100%}
+.slogo{font-size:26px;font-weight:700;color:var(--accent);margin-bottom:8px}
+.ssub{font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:24px}
+.scard{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px}
+.sstep{font-size:13px;font-weight:500;color:var(--text);margin-bottom:10px}
+.slink{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#0d1117;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;margin-bottom:6px}
+.snote{font-size:12px;color:var(--text3);margin-bottom:22px;line-height:1.6}
+.sinp{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:11px 14px;font-size:14px;color:var(--text);outline:none;font-family:monospace;margin-bottom:12px;transition:border-color .2s}
+.sinp:focus{border-color:var(--accent)}
+.sbtn{width:100%;background:var(--accent);color:#0d1117;border:none;padding:13px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--fn)}
+.sbtn:hover{background:var(--accent2)}
+.sskip{display:block;text-align:center;margin-top:10px;background:transparent;border:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline;font-family:var(--fn)}
+nav{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;gap:12px}
+.logo{font-size:15px;font-weight:700;color:var(--accent)}
+.tabs{display:flex;gap:2px;background:var(--bg3);border-radius:10px;padding:3px;border:1px solid var(--border)}
+.tab{padding:6px 18px;font-size:13px;cursor:pointer;border-radius:8px;color:var(--text2);border:none;background:transparent;font-family:var(--fn);transition:all .15s}
+.tab.on{background:var(--bg4);color:var(--accent);font-weight:500}
+.tab:hover:not(.on){color:var(--text)}
+.navr{display:flex;gap:8px;align-items:center}
+.nbtn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text3);font-size:11px;cursor:pointer;font-family:var(--fn)}
+.nbtn:hover{color:var(--text2);border-color:var(--text3)}
+.rbtn{display:flex;align-items:center;gap:5px;background:rgba(79,195,247,.1);border:1px solid rgba(79,195,247,.3);border-radius:8px;padding:6px 14px;color:var(--accent);font-size:12px;cursor:pointer;font-family:var(--fn)}
+.rbtn:hover{background:rgba(79,195,247,.18)}
+.rbtn:disabled{opacity:.4;cursor:default}
+.spin{display:inline-block}.spin.go{animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.main{flex:1;overflow-y:auto;padding:20px;max-width:1100px;margin:0 auto;width:100%}
+.panel{display:none}.panel.on{display:block}
+.statusbar{display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:12px;color:var(--text2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.dot.ok{background:var(--green)}.dot.err{background:var(--red)}.dot.loading{background:var(--accent);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.metric{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.ml{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px}
+.mv{font-size:21px;font-weight:500;line-height:1;color:var(--text)}.mv.blue{color:var(--accent)}
+.ms{font-size:12px;color:var(--text2);margin-top:4px}
+.pos{color:var(--green)!important}.neg{color:var(--red)!important}
+.goal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px}
+.goal-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.goal-lbl{font-size:14px;font-weight:500}.goal-num{font-size:13px;color:var(--text2)}
+.track{height:9px;background:var(--bg4);border-radius:5px;overflow:hidden;margin-bottom:8px}
+.fill{height:100%;background:var(--accent);border-radius:5px;width:0%;transition:width 1.2s ease}
+.goal-bot{display:flex;justify-content:space-between;font-size:12px;color:var(--text2)}
+.gpct{color:var(--accent);font-weight:500}
+.crow{display:grid;grid-template-columns:290px 1fr;gap:14px;margin-bottom:16px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.ctitle{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px}
+.legend{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.leg{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2)}
+.ldot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.lname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.lpct{font-weight:500;color:var(--text);flex-shrink:0}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;padding:0 10px 10px;text-align:left;font-weight:400}
+th.r,td.r{text-align:right}
+td{padding:10px 10px;border-top:1px solid var(--border);font-size:13px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:hover td{background:rgba(255,255,255,.015)}
+.tk{font-weight:500;color:var(--accent)}
+.badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin-left:5px;vertical-align:middle}
+.b-etf{background:rgba(79,195,247,.15);color:#4fc3f7}.b-stock{background:rgba(129,180,234,.15);color:#81b4ea}.b-crypto{background:rgba(179,157,219,.15);color:#b39ddb}.b-manual{background:rgba(77,182,172,.15);color:#4db6ac}
+.psub{font-size:10px;color:var(--text3);margin-top:1px}
+.sechdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.sectitle{font-size:14px;font-weight:500}
+.btn{background:var(--accent);color:#0d1117;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--fn)}.btn:hover{background:var(--accent2)}
+.btn-sm{padding:5px 11px;font-size:11px;border-radius:7px}
+.btn-out{background:transparent;color:var(--accent);border:1px solid rgba(79,195,247,.35);padding:5px 11px;border-radius:7px;font-size:11px;cursor:pointer;font-family:var(--fn)}.btn-out:hover{background:rgba(79,195,247,.1)}
+.btn-del{background:transparent;color:var(--red);border:1px solid rgba(240,96,96,.35);padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;font-family:var(--fn)}.btn-del:hover{background:rgba(240,96,96,.08)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:flex-start;justify-content:center;padding-top:50px}
+.overlay.on{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;width:420px;max-width:calc(100vw - 32px);max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:500;margin-bottom:18px}
+.frow{margin-bottom:13px}
+.frow label{display:block;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+.frow input,.frow select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);outline:none;font-family:var(--fn);transition:border-color .2s}
+.frow input:focus,.frow select:focus{border-color:rgba(79,195,247,.5)}
+.frow select option{background:var(--bg3)}
+.hint{font-size:11px;color:var(--text3);margin-top:4px;line-height:1.6}
+.mact{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.btn-can{background:transparent;border:1px solid var(--border);padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text2);font-family:var(--fn)}.btn-can:hover{border-color:var(--text2)}
+.mform{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.mrow{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.mrow label{display:block;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+.mrow input,.mrow select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:13px;color:var(--text);outline:none;font-family:var(--fn)}
+.mrow input:focus{border-color:rgba(79,195,247,.5)}
+.gm{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.empty{text-align:center;padding:40px;color:var(--text2);font-size:13px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.pin-btn{background:var(--bg2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:20px;font-weight:500;padding:18px;cursor:pointer;font-family:var(--fn);transition:background .15s}
+.pin-btn:hover{background:var(--bg3)}
+.pin-btn:active{background:var(--bg4)}
+.blurred .blur-val{filter:blur(6px);user-select:none;transition:filter .2s}
+.blur-btn.on{background:rgba(79,195,247,.2);color:var(--accent);border-color:rgba(79,195,247,.5)}
+</style>
+</head>
+<body>
+
+<!-- PINCODE SCREEN -->
+<div id="pin-screen" style="position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column">
+  <div style="text-align:center;width:280px">
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px"><svg width="44" height="44" viewBox="-40 -40 80 80" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="0,-36 31,-18 31,18 0,36 -31,18 -31,-18" fill="#1a1d25" stroke="#4fc3f7" stroke-width="2"/>
+  <polyline points="-16,10 -6,-8 4,4 14,-18 24,-8" fill="none" stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24" cy="-8" r="3" fill="#4fc3f7"/>
+</svg><span style="font-size:28px;font-weight:700;color:var(--accent)">Forge</span></div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:32px">Voer je pincode in</div>
+    <div style="display:flex;justify-content:center;gap:12px;margin-bottom:24px">
+      <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);display:inline-block" id="pd0"></span>
+      <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);display:inline-block" id="pd1"></span>
+      <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);display:inline-block" id="pd2"></span>
+      <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);display:inline-block" id="pd3"></span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+      <button onclick="pinPress(1)" class="pin-btn">1</button>
+      <button onclick="pinPress(2)" class="pin-btn">2</button>
+      <button onclick="pinPress(3)" class="pin-btn">3</button>
+      <button onclick="pinPress(4)" class="pin-btn">4</button>
+      <button onclick="pinPress(5)" class="pin-btn">5</button>
+      <button onclick="pinPress(6)" class="pin-btn">6</button>
+      <button onclick="pinPress(7)" class="pin-btn">7</button>
+      <button onclick="pinPress(8)" class="pin-btn">8</button>
+      <button onclick="pinPress(9)" class="pin-btn">9</button>
+      <button onclick="pinClear()" class="pin-btn" style="color:var(--text2);font-size:12px">Wis</button>
+      <button onclick="pinPress(0)" class="pin-btn">0</button>
+      <button onclick="pinDel()" class="pin-btn" style="font-size:18px">&#9003;</button>
+    </div>
+    <div id="pin-error" style="color:var(--red);font-size:13px;min-height:20px"></div>
+  </div>
+</div>
+
+<div class="setup" id="setup">
+  <div class="sbox">
+    <div class="slogo" style="display:flex;align-items:center;gap:10px"><svg width="28" height="28" viewBox="-50 -50 100 100"><rect x="-50" y="-50" width="100" height="100" fill="#12141a" rx="14"/><polygon points="0,-36 31,-18 31,18 0,36 -31,18 -31,-18" fill="#1a2535" stroke="#4fc3f7" stroke-width="2.5"/><polyline points="-17,11 -7,-9 3,5 13,-19 25,-9" fill="none" stroke="#4fc3f7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="-9" r="4.5" fill="#4fc3f7"/></svg><span>Forge</span></div>
+    <div class="ssub">Twee gratis API keys instellen — elk duurt 1 minuut.<br>Crypto werkt altijd zonder key.</div>
+    <div class="scard">
+      <div class="sstep">Key 1 — Alpha Vantage <span style="font-weight:400;color:var(--text3)">(voor VWCE.FRK)</span></div>
+      <a class="slink" style="font-size:12px;padding:7px 14px;margin-bottom:4px" href="https://www.alphavantage.co/support/#api-key" target="_blank">Gratis key ophalen ↗</a>
+      <div class="snote">Naam + email → direct je key. Gratis, geen creditcard. 25 calls/dag.</div>
+      <input class="sinp" id="key-inp" type="text" placeholder="Alpha Vantage key (voor VWCE)">
+
+      <div class="sstep">Key 2 — Finnhub <span style="font-weight:400;color:var(--text3)">(voor TSLA, META, VST, BE)</span></div>
+      <a class="slink" style="font-size:12px;padding:7px 14px;margin-bottom:4px" href="https://finnhub.io/register" target="_blank">Gratis key ophalen ↗</a>
+      <div class="snote">Naam + email → direct je key. Gratis, geen creditcard. Geen daglimiet.</div>
+      <input class="sinp" id="finnhub-inp" type="text" placeholder="Finnhub key (voor US aandelen)">
+
+      <button class="sbtn" onclick="startApp()">Opslaan en starten</button>
+      <button class="sskip" onclick="skipKey()">Overslaan — alleen crypto tonen</button>
+    </div>
+  </div>
+</div>
+<nav>
+  <div class="logo" style="display:flex;align-items:center;gap:10px"><svg width="28" height="28" viewBox="-40 -40 80 80"><polygon points="0,-36 31,-18 31,18 0,36 -31,18 -31,-18" fill="#1a1d25" stroke="#4fc3f7" stroke-width="2"/><polyline points="-16,10 -6,-8 4,4 14,-18 24,-8" fill="none" stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="-8" r="3" fill="#4fc3f7"/></svg><span>Forge</span></div>
+  <div class="tabs">
+    <button class="tab on" onclick="goTab('dashboard',this)">Dashboard</button>
+    <button class="tab" onclick="goTab('assets',this)">Assets</button>
+    <button class="tab" onclick="goTab('growth',this)">Groei</button>
+  </div>
+  <div class="navr">
+    <button class="nbtn" onclick="changeKey()">API keys</button>
+    <button class="nbtn blur-btn" id="blur-btn" onclick="toggleBlur()" title="Bedragen verbergen">👁 Verbergen</button>
+    <button class="rbtn" id="rbtn" onclick="loadAll()"><span class="spin" id="spin">↻</span>&nbsp;Vernieuwen</button>
+  </div>
+</nav>
+<div class="main" id="app-main">
+  <div id="panel-dashboard" class="panel on">
+    <div class="statusbar"><span class="dot" id="dot"></span><span id="stxt">Laden...</span></div>
+    <div class="metrics" style="grid-template-columns:repeat(5,1fr)">
+      <div class="metric"><div class="ml">Totaal vermogen</div><div class="mv blue" id="m-tot" class="blur-val">—</div><div class="ms" id="m-tots" class="blur-val">—</div></div>
+      <div class="metric"><div class="ml">ETF's</div><div class="mv" id="m-etf" class="blur-val">—</div><div class="ms">VWCE</div></div>
+      <div class="metric"><div class="ml">Aandelen</div><div class="mv" id="m-stk" class="blur-val">—</div><div class="ms" id="m-stks" class="blur-val">—</div></div>
+      <div class="metric"><div class="ml">Crypto</div><div class="mv" id="m-cry" class="blur-val">—</div><div class="ms" id="m-crys" class="blur-val">—</div></div>
+      <div class="metric"><div class="ml">Cash / Overig</div><div class="mv" id="m-cash" class="blur-val">—</div><div class="ms" id="m-cashs" class="blur-val">handmatig</div></div>
+    </div>
+    <div id="total-pl-bar" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px">Ongerealiseerd rendement</span>
+      <div style="text-align:right">
+        <span class="blur-val" id="pl-total" style="font-size:16px;font-weight:500">—</span>
+        <span class="blur-val" id="pl-pct" style="font-size:12px;color:var(--text2);margin-left:8px">—</span>
+      </div>
+    </div>
+    <div class="goal">
+      <div class="goal-top">
+        <div>
+          <span class="goal-lbl blur-val" id="goal-lbl">Spaardoel</span>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="milestone-dots" class="blur-val"></div>
+        </div>
+        <span class="goal-num blur-val" id="gnums">—</span>
+      </div>
+      <div class="track"><div class="fill" id="gfill"></div></div>
+      <div class="goal-bot"><span class="gpct blur-val" id="gpct">0%</span><span class="blur-val" id="grem">—</span></div>
+    </div>
+    <div class="crow">
+      <div class="card">
+        <div class="ctitle">Allocatie</div>
+        <div style="position:relative;height:190px"><canvas id="pieChart"></canvas></div>
+        <div class="legend" id="pie-leg"></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Posities</div>
+        <div class="tw"><table>
+          <colgroup><col style="width:30%"><col style="width:18%"><col style="width:14%"><col style="width:20%"><col style="width:18%"></colgroup>
+          <thead><tr><th>Asset</th><th class="r">Prijs</th><th class="r">Aantal</th><th class="r">Waarde</th><th class="r">P/L</th></tr></thead>
+          <tbody id="pos-body"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+  <div id="panel-assets" class="panel">
+    <div class="sechdr"><span class="sectitle">Mijn assets</span><button class="btn btn-sm" onclick="openModal()">+ Toevoegen</button></div>
+    <div class="card"><div class="tw"><table>
+      <colgroup><col style="width:10%"><col style="width:19%"><col style="width:9%"><col style="width:11%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:14%"></colgroup>
+      <thead><tr><th>Ticker</th><th>Naam</th><th>Type</th><th class="r">Aantal</th><th class="r">Prijs</th><th class="r">Waarde</th><th class="r">P/L</th><th class="r"></th></tr></thead>
+      <tbody id="assets-body"></tbody>
+    </table></div></div>
+  </div>
+  <div id="panel-growth" class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span class="sectitle">Groei overzicht</span>
+      <button class="btn" onclick="addSnapshot()">Snapshot toevoegen</button>
+    </div>
+    <div class="mform">
+      <div class="ctitle" style="margin-bottom:12px">Maand handmatig toevoegen</div>
+      <div class="mrow">
+        <div><label>Maand</label><select id="msel"></select></div>
+        <div><label>Vermogen (€)</label><input type="number" id="mval" placeholder="bv. 12500" step="0.01"></div>
+        <button class="btn" style="height:36px;align-self:end" onclick="addMonth()">Opslaan</button>
+      </div>
+    </div>
+    <div class="gm">
+      <div class="metric"><div class="ml">Laatste waarde</div><div class="mv" id="g-last" class="mv blur-val">—</div></div>
+      <div class="metric"><div class="ml">Groei vorige maand</div><div class="mv" id="g-mom" class="mv blur-val">—</div></div>
+      <div class="metric"><div class="ml">YTD groei</div><div class="mv" id="g-ytd" class="mv blur-val">—</div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="ctitle">Vermogen over tijd</div>
+      <div style="position:relative;height:250px"><canvas id="growChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="sechdr"><span class="sectitle">Records</span></div>
+      <div id="grow-tbl"><div class="empty">Voeg je eerste maand toe om te beginnen.</div></div>
+    </div>
+    <div class="card" id="proj-card" style="display:none;margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div class="ctitle" style="margin-bottom:0">Projectie vs. werkelijkheid</div>
+        <span id="proj-avg" style="font-size:12px;color:var(--text2)"></span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Stippellijn = verwachte groei op basis van jouw gemiddelde &nbsp;·&nbsp; Solide lijn = werkelijk vermogen</div>
+      <div style="position:relative;height:230px;margin-bottom:16px"><canvas id="projChart"></canvas></div>
+      <div id="proj-milestones" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-ttl">Asset toevoegen</h3>
+    <div class="frow"><label>Ticker (weergave)</label><input id="f-ticker" placeholder="bv. VWCE, TSLA, BTC"></div>
+    <div class="frow"><label>Naam</label><input id="f-name" placeholder="bv. Vanguard FTSE All-World"></div>
+    <div class="frow"><label>Type</label><select id="f-type" onchange="toggleFields()"><option value="etf">ETF</option><option value="stock">Aandeel</option><option value="crypto">Crypto</option><option value="manual">Handmatig (spaargeld etc.)</option></select></div>
+    <div class="frow" id="row-qty"><label>Aantal eenheden</label><input id="f-qty" type="number" step="any" placeholder="0.00000000"></div>
+    <div class="frow" id="row-buyprice">
+      <label>Gemiddelde aankoopprijs (€) <span style="font-size:10px;color:var(--text3);text-transform:none">— optioneel, voor P/L berekening</span></label>
+      <input id="f-buyprice" type="number" step="any" placeholder="bv. 98.50">
+    </div>
+    <div class="frow" id="row-manual-val" style="display:none">
+      <label>Waarde (€)</label>
+      <input id="f-manual-val" type="number" step="0.01" placeholder="bv. 5000.00">
+      <div class="hint">Vul het totale bedrag in euro in. Wordt niet automatisch bijgewerkt.</div>
+    </div>
+    <div id="row-av" class="frow">
+      <label>Alpha Vantage symbool</label>
+      <input id="f-av" placeholder="bv. TSLA of VWCE.FRK">
+      <div class="hint">US aandelen: gewone ticker → <strong>TSLA</strong>, <strong>META</strong>, <strong>VST</strong>, <strong>BE</strong><br>EU ETF's Frankfurt: ticker + .FRK → <strong>VWCE.FRK</strong><br>EU ETF's XETRA: ticker + .DEX → <strong>WQTM.DEX</strong><br>EU ETF's Amsterdam: ticker + .AMS → <strong>VWCE.AMS</strong></div>
+    </div>
+    <div id="row-cg" class="frow" style="display:none">
+      <label>CoinGecko ID</label>
+      <input id="f-cg" placeholder="bv. bitcoin, solana, ripple">
+      <div class="hint">Vind het ID op coingecko.com in de URL van de coin</div>
+    </div>
+    <div class="mact"><button class="btn-can" onclick="closeModal()">Annuleren</button><button class="btn" onclick="saveAsset()">Opslaan</button></div>
+  </div>
+</div>
+<script>
+const MILESTONES = [
+  { label: '€40k',  value: 40000 },
+  { label: '€60k',  value: 60000 },
+  { label: '€80k',  value: 80000 },
+  { label: '€100k', value: 100000 },
+];
+// Current active milestone = first one not yet reached
+function currentMilestone(t) {
+  return MILESTONES.find(m => t < m.value) || MILESTONES[MILESTONES.length - 1];
+}
+const MNL  = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+const CLRS = ['#4fc3f7','#81b4ea','#b39ddb','#4db6ac','#aed581','#ffb74d','#f48fb1','#80deea','#ce93d8','#a5d6a7'];
+
+const DEFAULTS = [
+  {id:1, ticker:'VWCE',   name:'Vanguard FTSE All-World', type:'etf',    qty:76.78999569, avSym:'VWCE.FRK', cgId:'', buyPrice:null},
+  {id:2, ticker:'VST',    name:'Vistra Energy',           type:'stock',  qty:3.67751564,  avSym:'VST',      cgId:'', buyPrice:null},
+  {id:3, ticker:'META',   name:'Meta Platforms',          type:'stock',  qty:0.57789789,  avSym:'META',     cgId:''},
+  {id:4, ticker:'BE',     name:'Bloom Energy',            type:'stock',  qty:1.09854006,  avSym:'BE',       cgId:''},
+  {id:5, ticker:'TSLA',   name:'Tesla',                   type:'stock',  qty:0.56815121,  avSym:'TSLA',     cgId:''},
+  {id:6, ticker:'BTC',    name:'Bitcoin',                 type:'crypto', qty:0.07185726,  avSym:'',         cgId:'bitcoin', buyPrice:null},
+  {id:7, ticker:'SOL',    name:'Solana',                  type:'crypto', qty:1.13422562,  avSym:'',         cgId:'solana', buyPrice:null},
+  {id:8, ticker:'XRP',    name:'XRP',                     type:'crypto', qty:42.831267,   avSym:'',         cgId:'ripple', buyPrice:null},
+  {id:9, ticker:'PORTAL', name:'Portal to Bitcoin',       type:'crypto', qty:5928.386,    avSym:'',         cgId:'portal', buyPrice:null},
+];
+
+let assets   = DEFAULTS.map(a => ({...a, price:null, rawP:null, rawC:null}));
+let monthly  = [];
+let nextId   = 10;
+let apiKey   = '';
+let eurRate  = 0.92;
+let editId   = null;
+let pieInst  = null;
+let growInst = null;
+
+function persist() {
+  localStorage.setItem('pf_v4_assets',  JSON.stringify(assets));
+  localStorage.setItem('pf_v4_monthly', JSON.stringify(monthly));
+  localStorage.setItem('pf_v4_nextId',  String(nextId));
+}
+function restore() {
+  try {
+    const a = localStorage.getItem('pf_v4_assets');  if (a) assets  = JSON.parse(a);
+    const m = localStorage.getItem('pf_v4_monthly'); if (m) monthly = JSON.parse(m);
+    const n = localStorage.getItem('pf_v4_nextId');  if (n) nextId  = parseInt(n);
+    apiKey = localStorage.getItem('pf_v4_key') || '';
+  } catch(e) {}
+}
+
+const fe = v => '\u20ac' + Number(v).toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fk = v => Math.abs(v) >= 1000 ? '\u20ac' + (v/1000).toLocaleString('nl-NL', {minimumFractionDigits:1, maximumFractionDigits:1}) + 'k' : fe(v);
+const fd = v => '$' + Number(v).toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+function goTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('panel-' + name).classList.add('on');
+  if (name === 'growth') { buildGrowChart(); renderGrowTable(); renderGrowMetrics(); buildProjection(); }
+  if (name === 'assets') renderAssetsTable();
+}
+
+function startApp() {
+  const k  = document.getElementById('key-inp').value.trim();
+  const fk = document.getElementById('finnhub-inp').value.trim();
+  if (!k && !fk) { alert('Vul minimaal één API key in.'); return; }
+  if (k)  { apiKey = k; localStorage.setItem('pf_v4_key', k); }
+  if (fk) { localStorage.setItem('pf_v4_finnhub', fk); }
+  document.getElementById('setup').style.display = 'none';
+  loadAll();
+}
+function skipKey() {
+  apiKey = '__none__';
+  localStorage.setItem('pf_v4_key', '__none__');
+  document.getElementById('setup').style.display = 'none';
+  loadAll();
+}
+function changeKey() {
+  document.getElementById('key-inp').value     = apiKey !== '__none__' ? apiKey : '';
+  document.getElementById('finnhub-inp').value = localStorage.getItem('pf_v4_finnhub') || '';
+  document.getElementById('setup').style.display = 'flex';
+}
+
+async function fetchEurRate() {
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD', {signal: AbortSignal.timeout(6000)});
+    const d = await r.json();
+    if (d && d.rates && d.rates.EUR) eurRate = d.rates.EUR;
+  } catch(e) {}
+}
+
+async function loadAll() {
+  setStatus('loading', 'Prijzen ophalen...');
+  document.getElementById('rbtn').disabled = true;
+  document.getElementById('spin').classList.add('go');
+  await fetchEurRate();
+  await Promise.allSettled([fetchCrypto(), fetchStocks()]);
+  const loaded = assets.filter(a => a.price !== null).length;
+  const time = new Date().toLocaleTimeString('nl-NL', {hour:'2-digit', minute:'2-digit'});
+  const allOk = loaded === assets.length;
+  setStatus(loaded > 0 ? 'ok' : 'err', 'Bijgewerkt om ' + time + ' \u2014 ' + loaded + '/' + assets.length + ' assets geladen');
+  document.getElementById('rbtn').disabled = false;
+  document.getElementById('spin').classList.remove('go');
+  renderAll();
+}
+
+function setStatus(s, txt) {
+  document.getElementById('dot').className = 'dot ' + s;
+  document.getElementById('stxt').textContent = txt;
+}
+
+async function fetchCrypto() {
+  const list = assets.filter(a => a.type === 'crypto' && a.cgId);
+  if (!list.length) return;
+  try {
+    const ids = list.map(a => a.cgId).join(',');
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=' + ids + '&vs_currencies=eur', {signal: AbortSignal.timeout(10000)});
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    list.forEach(a => {
+      if (d[a.cgId] && d[a.cgId].eur != null) {
+        a.price = d[a.cgId].eur;
+        a.rawP  = d[a.cgId].eur;
+        a.rawC  = 'EUR';
+      }
+    });
+  } catch(e) { console.warn('CoinGecko:', e.message); }
+}
+
+async function fetchOneAV(sym) {
+  const url = 'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + encodeURIComponent(sym) + '&apikey=' + apiKey;
+  const r = await fetch(url, {signal: AbortSignal.timeout(12000)});
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  if (d['Note'])        throw new Error('Alpha Vantage daglimiet bereikt (25/dag).');
+  if (d['Information']) throw new Error('Alpha Vantage daglimiet bereikt (25/dag).');
+  const q     = d['Global Quote'];
+  const price = q && parseFloat(q['05. price']);
+  if (!price || price === 0) throw new Error('Geen prijs voor ' + sym);
+  return price;
+}
+
+async function fetchStocks() {
+  const list = assets.filter(a => a.type !== 'crypto' && a.type !== 'manual' && a.avSym);
+  if (!list.length || !apiKey || apiKey === '__none__') return;
+
+  const euList = list.filter(a => /\.(FRK|AMS|DEX|DE|PAR|MIL|BRU|STO|OSL|HEL|CPH|VIE)$/i.test(a.avSym));
+  const usList = list.filter(a => !/\./.test(a.avSym));
+
+  // EU ETFs via Alpha Vantage (end-of-day)
+  // Cache: only fetch once per calendar day per symbol
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const a of euList) {
+    const cacheKey = 'av_cache_' + a.avSym;
+    const cached   = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+
+    if (cached && cached.date === today && cached.price > 0) {
+      // Use cached price — no API call needed
+      a.rawP = cached.price; a.rawC = 'EUR'; a.price = cached.price;
+      console.log('AV CACHED ' + a.ticker + ': €' + cached.price);
+      renderAll();
+      continue;
+    }
+
+    try {
+      const price = await fetchOneAV(a.avSym);
+      a.rawP = price; a.rawC = 'EUR'; a.price = price;
+      // Save to cache with today's date
+      localStorage.setItem(cacheKey, JSON.stringify({date: today, price: price}));
+      console.log('AV OK ' + a.ticker + ': €' + price);
+    } catch(e) {
+      // If fetch fails but we have an old cached price, use it
+      if (cached && cached.price > 0) {
+        a.rawP = cached.price; a.rawC = 'EUR'; a.price = cached.price;
+        console.log('AV STALE ' + a.ticker + ': €' + cached.price + ' (cache van ' + cached.date + ')');
+      } else {
+        console.warn('AV FAIL ' + a.ticker + ':', e.message);
+        if (e.message.includes('daglimiet')) setStatus('err', 'Alpha Vantage daglimiet bereikt — prijzen van gisteren worden gebruikt.');
+      }
+    }
+    renderAll();
+    if (usList.length) await new Promise(r => setTimeout(r, 500));
+  }
+
+  // US stocks via Finnhub: free, 60 calls/min, no daily limit
+  // Uses same apiKey field — but Finnhub key is different from Alpha Vantage
+  // We store Finnhub key separately
+  const finnhubKey = localStorage.getItem('pf_v4_finnhub') || '';
+  if (!usList.length) return;
+
+  if (!finnhubKey) {
+    // Show one-time prompt to also enter Finnhub key
+    setStatus('err', 'US aandelen hebben een Finnhub key nodig — klik "API keys" rechtsboven.');
+    return;
+  }
+
+  await Promise.allSettled(usList.map(async a => {
+    try {
+      const url = 'https://finnhub.io/api/v1/quote?symbol=' + encodeURIComponent(a.avSym) + '&token=' + finnhubKey;
+      const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      if (!d.c || d.c === 0) throw new Error('Geen prijs voor ' + a.avSym);
+      a.rawP = d.c; a.rawC = 'USD'; a.price = d.c * eurRate;
+      console.log('Finnhub OK ' + a.ticker + ': $' + d.c + ' -> €' + a.price.toFixed(2));
+    } catch(e) {
+      console.warn('Finnhub FAIL ' + a.ticker + ':', e.message);
+    }
+  }));
+  renderAll();
+}
+
+const total  = () => assets.reduce((s,a) => s + (a.price ? a.qty * a.price : 0), 0);
+const catTot = t  => assets.filter(a => a.type === t).reduce((s,a) => s + (a.price ? a.qty * a.price : 0), 0);
+
+function renderAll() {
+  renderMetrics();
+  renderPositions();
+  renderPie();
+  renderAssetsTable();
+}
+
+function renderMetrics() {
+  const t = total();
+  // bv = helper that always keeps blur-val class so blur toggle works correctly
+  function bv(id, baseCls, val) {
+    const el = document.getElementById(id);
+    el.className = (baseCls ? baseCls + ' ' : '') + 'blur-val';
+    el.textContent = val;
+  }
+  bv('m-tot',  'mv blue', t > 0 ? fk(t) : '\u2014');
+  bv('m-tots', 'ms',      t > 0 ? fe(t) : '\u2014');
+  const e = catTot('etf');
+  bv('m-etf',  'mv', e > 0 ? fk(e) : '\u2014');
+  const s = catTot('stock');
+  bv('m-stk',  'mv', s > 0 ? fk(s) : '\u2014');
+  bv('m-stks', 'ms', assets.filter(a => a.type === 'stock').length + ' posities');
+  const c = catTot('crypto');
+  bv('m-cry',  'mv', c > 0 ? fk(c) : '\u2014');
+  bv('m-crys', 'ms', assets.filter(a => a.type === 'crypto').length + ' assets');
+  const cash = catTot('manual');
+  bv('m-cash',  'mv', cash > 0 ? fk(cash) : '\u2014');
+  bv('m-cashs', 'ms', assets.filter(a => a.type === 'manual').length > 0 ? assets.filter(a => a.type === 'manual').map(a => a.name).join(', ') : 'handmatig');
+  // Total unrealised P/L
+  const plAssets = assets.filter(a => a.price != null && a.buyPrice != null && a.type !== 'manual');
+  const plBar = document.getElementById('total-pl-bar');
+  if (plAssets.length > 0) {
+    const totalCost = plAssets.reduce((s,a) => s + a.buyPrice * a.qty, 0);
+    const totalVal  = plAssets.reduce((s,a) => s + a.price  * a.qty, 0);
+    const plAmt  = totalVal - totalCost;
+    const plPct  = (plAmt / totalCost) * 100;
+    const plSign = plAmt >= 0 ? '+' : '';
+    const plCls  = plAmt >= 0 ? 'var(--green)' : 'var(--red)';
+    plBar.style.display = 'flex';
+    const elAmt = document.getElementById('pl-total');
+    const elPct = document.getElementById('pl-pct');
+    elAmt.textContent = plSign + fe(plAmt);
+    elAmt.style.color = plCls;
+    elPct.textContent = '(' + plSign + plPct.toFixed(2) + '%)';
+    elPct.style.color = plCls;
+  } else {
+    plBar.style.display = 'none';
+  }
+
+  // Milestones
+  const ms  = currentMilestone(t);
+  const prev = MILESTONES[MILESTONES.indexOf(ms) - 1];
+  const base = prev ? prev.value : 0;
+  const pct = t > 0 ? Math.min(((t - base) / (ms.value - base)) * 100, 100) : 0;
+  document.getElementById('gfill').style.width = Math.max(0, pct).toFixed(2) + '%';
+  const glEl = document.getElementById('goal-lbl'); glEl.textContent = 'Mijlpaal — ' + ms.label; glEl.className = 'goal-lbl blur-val';
+  bv('gnums', '', (t > 0 ? fe(t) : '\u2014') + ' / ' + fe(ms.value));
+  bv('gpct',  'gpct', Math.max(0, pct).toFixed(1) + '%');
+  const rem = ms.value - t;
+  bv('grem',  '', rem > 0 ? 'nog ' + fe(rem) + ' te gaan' : '\u2713 Behaald!');
+  // Milestone dots
+  const dots = document.getElementById('milestone-dots');
+  if (dots) {
+    dots.innerHTML = MILESTONES.map(m => {
+      const done = t >= m.value;
+      const active = m === ms;
+      return '<span style="font-size:11px;padding:2px 8px;border-radius:12px;font-weight:500;' +
+        (done   ? 'background:#4caf7d22;color:#4caf7d;' :
+         active ? 'background:rgba(79,195,247,.15);color:#4fc3f7;border:1px solid rgba(79,195,247,.3);' :
+                  'color:#4a5168;') + '">' +
+        (done ? '✓ ' : '') + m.label + '</span>';
+    }).join('');
+  }
+}
+
+function plHtml(a) {
+  if (a.price == null || a.buyPrice == null || a.type === 'manual') return '<span style="color:var(--text3)">—</span>';
+  const pl    = (a.price - a.buyPrice) * a.qty;
+  const plPct = ((a.price - a.buyPrice) / a.buyPrice) * 100;
+  const cls   = pl >= 0 ? 'pos' : 'neg';
+  const sign  = pl >= 0 ? '+' : '';
+  return '<span class="' + cls + ' blur-val">' + sign + fe(pl) + '</span>' +
+    '<div class="psub ' + cls + ' blur-val">' + sign + plPct.toFixed(2) + '%</div>';
+}
+
+function renderPositions() {
+  const body = document.getElementById('pos-body');
+  const sorted = [...assets].sort((a,b) => (b.price*b.qty||0) - (a.price*a.qty||0));
+  body.innerHTML = sorted.map(a => {
+    const val = a.price != null ? a.qty * a.price : null;
+    const bl  = a.type === 'etf' ? 'ETF' : a.type === 'stock' ? 'Aandeel' : a.type === 'manual' ? 'Handmatig' : 'Crypto';
+    const bc  = 'b-' + a.type;
+    let ph = '<span style="color:var(--text3)">—</span>';
+    if (a.price != null) {
+      ph = fe(a.price);
+      if (a.rawC === 'USD' && a.rawP) ph += '<div class="psub">' + fd(a.rawP) + '</div>';
+    }
+    const qty = Number(a.qty).toLocaleString('nl-NL', {maximumFractionDigits:4});
+    const valHtml = val != null ? '<strong class="blur-val">' + fe(val) + '</strong>' : '<span style="color:var(--text3)">—</span>';
+    return '<tr>' +
+      '<td><span class="tk">' + a.ticker + '</span><span class="badge ' + bc + '">' + bl + '</span></td>' +
+      '<td class="r blur-val">' + ph + '</td>' +
+      '<td class="r" style="color:var(--text2);font-size:11px">' + qty + '</td>' +
+      '<td class="r">' + valHtml + '</td>' +
+      '<td class="r">' + plHtml(a) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderPie() {
+  const vals = assets.map(a => a.price ? Math.max(a.qty * a.price, 0) : 0);
+  const sum  = vals.reduce((s,v) => s + v, 0);
+  if (sum === 0) return;
+  if (pieInst) pieInst.destroy();
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  pieInst = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: assets.map(a => a.ticker),
+      datasets: [{
+        data: vals,
+        backgroundColor: CLRS,
+        borderColor: '#12141a',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d25',
+          borderColor: '#252a38',
+          borderWidth: 1,
+          titleColor: '#8b92a8',
+          bodyColor: '#e8eaf0',
+          padding: 10,
+          callbacks: {
+            label: function(c) {
+              return ' ' + fe(c.raw) + ' (' + ((c.raw / sum) * 100).toFixed(1) + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+  const legData = [...assets].map((a,i) => ({ticker:a.ticker, name:a.name, v:vals[i], c:CLRS[i]})).sort((a,b) => b.v - a.v);
+  document.getElementById('pie-leg').innerHTML = legData.map(a =>
+    '<div class="leg"><span class="ldot" style="background:' + a.c + '"></span>' +
+    '<span class="lname">' + a.ticker + ' <span style="color:var(--text3);font-size:10px">' + a.name + '</span></span>' +
+    '<span class="lpct">' + ((a.v/sum)*100).toFixed(1) + '%</span></div>'
+  ).join('');
+}
+
+function renderAssetsTable() {
+  const body = document.getElementById('assets-body');
+  const sorted = [...assets].sort((a,b) => (b.price*b.qty||0) - (a.price*a.qty||0));
+  body.innerHTML = sorted.map(a => {
+    const val = a.price != null ? a.qty * a.price : null;
+    const bl  = a.type === 'etf' ? 'ETF' : a.type === 'stock' ? 'Aandeel' : a.type === 'manual' ? 'Handmatig' : 'Crypto';
+    const sym = (a.type !== 'crypto' && a.avSym) ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">' + a.avSym + '</span>' : '';
+    let ph = '\u2014';
+    if (a.price != null) {
+      ph = fe(a.price);
+      if (a.rawC === 'USD' && a.rawP) ph += '<div class="psub">' + fd(a.rawP) + '</div>';
+    }
+    const qty = Number(a.qty).toLocaleString('nl-NL', {maximumFractionDigits:6});
+    return '<tr>' +
+      '<td><span class="tk">' + a.ticker + '</span>' + sym + '</td>' +
+      '<td style="font-size:12px;color:var(--text2)">' + a.name + '</td>' +
+      '<td><span class="badge b-' + a.type + '">' + bl + '</span></td>' +
+      '<td class="r">' + qty + '</td>' +
+      '<td class="r blur-val">' + ph + '</td>' +
+      '<td class="r blur-val" style="font-weight:500">' + (val != null ? fe(val) : '\u2014') + '</td>' +
+      '<td class="r">' + plHtml(a) + '</td>' +
+      '<td class="r"><button class="btn-out" style="margin-right:4px" onclick="openModal(' + a.id + ')">Wijzig</button>' +
+      '<button class="btn-del" onclick="delAsset(' + a.id + ')">\u2715</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function toggleFields() {
+  const t = document.getElementById('f-type').value;
+  const isManual = t === 'manual';
+  const isCrypto = t === 'crypto';
+  document.getElementById('row-qty').style.display        = isManual ? 'none' : 'block';
+  document.getElementById('row-buyprice').style.display   = isManual ? 'none' : 'block';
+  document.getElementById('row-manual-val').style.display = isManual ? 'block' : 'none';
+  document.getElementById('row-av').style.display         = (isCrypto || isManual) ? 'none' : 'block';
+  document.getElementById('row-cg').style.display         = isCrypto ? 'block' : 'none';
+}
+function openModal(id) {
+  editId = id || null;
+  document.getElementById('modal-ttl').textContent = id ? 'Asset wijzigen' : 'Asset toevoegen';
+  if (id) {
+    const a = assets.find(x => x.id === id);
+    document.getElementById('f-ticker').value = a.ticker;
+    document.getElementById('f-name').value   = a.name;
+    document.getElementById('f-type').value   = a.type;
+    document.getElementById('f-qty').value    = a.qty;
+    document.getElementById('f-av').value          = a.avSym || '';
+    document.getElementById('f-cg').value          = a.cgId  || '';
+    document.getElementById('f-manual-val').value  = a.type === 'manual' ? (a.price || '') : '';
+    document.getElementById('f-buyprice').value    = a.buyPrice != null ? a.buyPrice : '';
+  } else {
+    ['f-ticker','f-name','f-qty','f-av','f-cg','f-manual-val','f-buyprice'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-type').value = 'etf';
+  }
+  toggleFields();
+  document.getElementById('modal').classList.add('on');
+}
+function closeModal() { document.getElementById('modal').classList.remove('on'); }
+document.getElementById('modal').addEventListener('click', function(e) { if (e.target.id === 'modal') closeModal(); });
+
+function saveAsset() {
+  const ticker     = document.getElementById('f-ticker').value.trim().toUpperCase();
+  const buyPrice   = parseFloat(document.getElementById('f-buyprice').value) || null;
+  const name       = document.getElementById('f-name').value.trim();
+  const type       = document.getElementById('f-type').value;
+  const avSym      = document.getElementById('f-av').value.trim().toUpperCase();
+  const cgId       = document.getElementById('f-cg').value.trim().toLowerCase();
+  const manualVal  = parseFloat(document.getElementById('f-manual-val').value);
+  const qty        = type === 'manual' ? 1 : parseFloat(document.getElementById('f-qty').value);
+  if (!ticker) { alert('Vul een naam in.'); return; }
+  if (type === 'manual') {
+    if (!manualVal || isNaN(manualVal)) { alert('Vul een bedrag in.'); return; }
+  } else {
+    if (!qty || isNaN(qty)) { alert('Vul het aantal in.'); return; }
+  }
+  if (editId) {
+    const a = assets.find(x => x.id === editId);
+    if (type === 'manual') {
+      Object.assign(a, {ticker, name, type, qty:1, avSym:'', cgId:'', price:manualVal, rawP:manualVal, rawC:'EUR'});
+    } else {
+      Object.assign(a, {ticker, name, type, qty, avSym, cgId, buyPrice, price:null, rawP:null, rawC:null});
+    }
+  } else {
+    if (type === 'manual') {
+      assets.push({id:nextId++, ticker, name, type, qty:1, avSym:'', cgId:'', price:manualVal, rawP:manualVal, rawC:'EUR'});
+    } else {
+      assets.push({id:nextId++, ticker, name, type, qty, avSym, cgId, buyPrice, price:null, rawP:null, rawC:null});
+    }
+  }
+  persist();
+  closeModal();
+  loadAll();
+}
+function delAsset(id) {
+  if (!confirm('Asset verwijderen?')) return;
+  assets = assets.filter(a => a.id !== id);
+  persist();
+  renderAll();
+}
+
+function buildMonthSel() {
+  const sel = document.getElementById('msel');
+  const now = new Date();
+  for (let y = now.getFullYear() - 2; y <= now.getFullYear() + 1; y++) {
+    MNL.forEach((m, i) => {
+      const o = document.createElement('option');
+      o.value = y + '-' + String(i+1).padStart(2,'0');
+      o.textContent = m + ' ' + y;
+      if (y === now.getFullYear() && i === now.getMonth()) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+}
+function addMonth() {
+  const key = document.getElementById('msel').value;
+  const val = parseFloat(document.getElementById('mval').value);
+  if (!val || isNaN(val)) { alert('Vul een bedrag in.'); return; }
+  const idx = monthly.findIndex(d => d.key === key);
+  if (idx >= 0) monthly[idx].value = val; else monthly.push({key, value:val});
+  monthly.sort((a,b) => a.key.localeCompare(b.key));
+  document.getElementById('mval').value = '';
+  persist();
+  renderGrowMetrics();
+  renderGrowTable();
+  buildGrowChart();
+  buildProjection();
+}
+function delMonth(key) {
+  if (!confirm('Verwijderen?')) return;
+  monthly = monthly.filter(d => d.key !== key);
+  persist();
+  renderGrowMetrics();
+  renderGrowTable();
+  buildGrowChart();
+}
+function renderGrowMetrics() {
+  if (!monthly.length) return;
+  const last = monthly[monthly.length - 1];
+  const elLast = document.getElementById('g-last');
+  elLast.textContent = fe(last.value);
+  elLast.className   = 'mv blur-val';
+  if (monthly.length >= 2) {
+    const prev = monthly[monthly.length - 2];
+    const diff = last.value - prev.value;
+    const pct  = ((diff / prev.value) * 100).toFixed(1);
+    const el   = document.getElementById('g-mom');
+    el.textContent = (diff >= 0 ? '+' : '') + fe(diff) + ' (' + pct + '%)';
+    el.className   = 'mv blur-val ' + (diff >= 0 ? 'pos' : 'neg');
+  }
+  const yr = new Date().getFullYear();
+  const ys = monthly.find(d => d.key.startsWith(yr + '-'));
+  if (ys) {
+    const diff = last.value - ys.value;
+    const pct  = ((diff / ys.value) * 100).toFixed(1);
+    const el   = document.getElementById('g-ytd');
+    el.textContent = (diff >= 0 ? '+' : '') + fe(diff) + ' (' + pct + '%)';
+    el.className   = 'mv blur-val ' + (diff >= 0 ? 'pos' : 'neg');
+  }
+}
+function renderGrowTable() {
+  const wrap = document.getElementById('grow-tbl');
+  if (!monthly.length) {
+    wrap.innerHTML = '<div class="empty">Voeg je eerste maand toe om te beginnen.</div>';
+    return;
+  }
+  const vals = monthly.map(d => d.value);
+  const rows = [...monthly].reverse().map((d, i, arr) => {
+    const prev = arr[i + 1];
+    const diff = prev ? d.value - prev.value : null;
+    const pct  = prev ? ((diff / prev.value) * 100).toFixed(1) : null;
+    const parts = d.key.split('-');
+    const lbl = MNL[parseInt(parts[1]) - 1] + ' ' + parts[0];
+    const goalPct = ((d.value / currentMilestone(d.value).value) * 100).toFixed(1);
+    const diffHtml = diff != null ? '<span class="' + (diff>=0?'pos':'neg') + '">' + (diff>=0?'+':'') + fe(diff) + '</span>' : '\u2014';
+    const pctHtml  = pct  != null ? '<span class="' + (parseFloat(pct)>=0?'pos':'neg') + '">' + (parseFloat(pct)>=0?'+':'') + pct + '%</span>' : '\u2014';
+    return '<tr><td style="font-weight:500">' + lbl + '</td><td class="r blur-val">' + fe(d.value) + '</td><td class="r blur-val">' + diffHtml + '</td><td class="r blur-val">' + pctHtml + '</td><td class="r blur-val" style="color:var(--text2)">' + goalPct + '%</td><td class="r"><button class="btn-del" onclick="delMonth(\'' + d.key + '\')">\u2715</button></td></tr>';
+  }).join('');
+  wrap.innerHTML = '<table><thead><tr><th>Maand</th><th class="r">Vermogen</th><th class="r">Groei \u20ac</th><th class="r">Groei %</th><th class="r">Doel %</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function buildGrowChart() {
+  if (!monthly.length) return;
+  const labels = monthly.map(d => {
+    const parts = d.key.split('-');
+    return MNL[parseInt(parts[1]) - 1] + "'" + parts[0].slice(2);
+  });
+  const vals = monthly.map(d => d.value);
+  if (growInst) growInst.destroy();
+  const ctx = document.getElementById('growChart').getContext('2d');
+  growInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Vermogen',
+          data: vals,
+          borderColor: '#4fc3f7',
+          borderWidth: 2.5,
+          pointBackgroundColor: '#4fc3f7',
+          pointBorderColor: '#12141a',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
+          backgroundColor: 'rgba(79,195,247,.07)',
+          tension: 0.35
+        },
+        {
+          label: 'Doel',
+          data: vals.map(function(v) { return currentMilestone(v).value; }),
+          borderColor: 'rgba(79,195,247,.2)',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d25',
+          borderColor: '#252a38',
+          borderWidth: 1,
+          titleColor: '#8b92a8',
+          bodyColor: '#e8eaf0',
+          padding: 12,
+          callbacks: {
+            title: function(c) { return c[0].label; },
+            label: function(c) {
+              if (c.datasetIndex === 1) return ' Doel: ' + fe(currentMilestone(vals[vals.length-1] || 0).value);
+              const i = c.dataIndex;
+              const v = c.raw;
+              const lines = [' Vermogen: ' + fe(v)];
+              if (i > 0) {
+                const d = v - vals[i-1];
+                lines.push(' Groei: ' + (d >= 0 ? '+' : '') + fe(d) + ' (' + ((d/vals[i-1])*100).toFixed(1) + '%)');
+              }
+              const goalVal = currentMilestone(v).value; lines.push(' Mijlpaal: ' + ((v/goalVal)*100).toFixed(1) + '%');
+              return lines;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#4a5168', font: {size:11}, autoSkip: false, maxRotation: 45 },
+          grid: { color: '#1e2330' },
+          border: { color: '#252a38' }
+        },
+        y: {
+          ticks: { color: '#4a5168', font: {size:11}, callback: function(v) { return fk(v); } },
+          grid: { color: '#1e2330' },
+          border: { color: '#252a38' }
+        }
+      }
+    }
+  });
+}
+
+function toggleBlur() {
+  const main = document.getElementById('app-main');
+  const btn  = document.getElementById('blur-btn');
+  const on   = main.classList.toggle('blurred');
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '👁 Tonen' : '👁 Verbergen';
+  localStorage.setItem('pf_v4_blur', on ? '1' : '0');
+}
+
+// ── PINCODE ──────────────────────────────────────────────────
+const CORRECT_PIN = '1811';
+let pinEntry = '';
+
+function pinPress(n) {
+  if (pinEntry.length >= 4) return;
+  pinEntry += String(n);
+  updatePinDots();
+  if (pinEntry.length === 4) {
+    setTimeout(checkPin, 150);
+  }
+}
+function pinDel() {
+  pinEntry = pinEntry.slice(0, -1);
+  updatePinDots();
+}
+function pinClear() {
+  pinEntry = '';
+  updatePinDots();
+}
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('pd' + i);
+    dot.style.background   = i < pinEntry.length ? 'var(--accent)' : 'transparent';
+    dot.style.borderColor  = i < pinEntry.length ? 'var(--accent)' : 'var(--text3)';
+  }
+}
+// Keyboard support for pincode
+document.addEventListener('keydown', function(e) {
+  if (document.getElementById('pin-screen').style.display === 'none') return;
+  if (e.key >= '0' && e.key <= '9') pinPress(parseInt(e.key));
+  else if (e.key === 'Backspace') pinDel();
+  else if (e.key === 'Escape') pinClear();
+});
+
+function checkPin() {
+  if (pinEntry === CORRECT_PIN) {
+    document.getElementById('pin-screen').style.display = 'none';
+    // Show setup if no key, otherwise load
+    if (!apiKey) {
+      document.getElementById('setup').style.display = 'flex';
+    } else {
+      loadAll();
+    }
+  } else {
+    document.getElementById('pin-error').textContent = 'Onjuiste pincode, probeer opnieuw';
+    pinEntry = '';
+    updatePinDots();
+    setTimeout(() => { document.getElementById('pin-error').textContent = ''; }, 2000);
+  }
+}
+
+// ── SNAPSHOT ─────────────────────────────────────────────────
+function addSnapshot() {
+  const t = total();
+  if (t === 0) { alert('Geen vermogen geladen — wacht tot prijzen zijn opgehaald.'); return; }
+  const now = new Date();
+  const key = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const existing = monthly.find(d => d.key === key);
+  const lbl = MNL[now.getMonth()] + ' ' + now.getFullYear();
+  if (existing) {
+    if (!confirm('Er bestaat al een snapshot voor ' + lbl + ' (€' + existing.value.toFixed(2) + '). Overschrijven met huidig vermogen (' + fe(t) + ')?')) return;
+    existing.value = Math.round(t * 100) / 100;
+  } else {
+    monthly.push({key, value: Math.round(t * 100) / 100});
+    monthly.sort((a,b) => a.key.localeCompare(b.key));
+  }
+  persist();
+  renderGrowMetrics();
+  renderGrowTable();
+  buildGrowChart();
+  // Switch to growth tab to show result
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.tab')[2].classList.add('on');
+  document.getElementById('panel-growth').classList.add('on');
+  buildGrowChart(); renderGrowTable(); renderGrowMetrics(); buildProjection();
+  alert('Snapshot opgeslagen voor ' + lbl + ': ' + fe(t));
+}
+
+// ── PROJECTIE ────────────────────────────────────────────────
+let projInst = null;
+
+function buildProjection() {
+  const card = document.getElementById('proj-card');
+  if (monthly.length < 2) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  // Average monthly growth
+  const first = monthly[0];
+  const last  = monthly[monthly.length - 1];
+  const fp = first.key.split('-'), lp = last.key.split('-');
+  const nMonths = (parseInt(lp[0]) - parseInt(fp[0])) * 12 + (parseInt(lp[1]) - parseInt(fp[1]));
+  if (nMonths === 0) { card.style.display = 'none'; return; }
+  const avgGrowth = (last.value - first.value) / nMonths;
+  document.getElementById('proj-avg').textContent =
+    'Gem. groei: ' + (avgGrowth >= 0 ? '+' : '') + fe(avgGrowth) + '/maand';
+
+  // Build unified timeline starting from first snapshot month
+  const startDate = new Date(parseInt(fp[0]), parseInt(fp[1]) - 1, 1);
+  const maxGoal   = MILESTONES[MILESTONES.length - 1].value;
+  const maxFuture = 120; // max 10 years ahead
+
+  // Historical data as a map: key -> value
+  const histMap = {};
+  monthly.forEach(d => { histMap[d.key] = d.value; });
+
+  // Find how many months from start to last known + future
+  const lastDate  = new Date(parseInt(lp[0]), parseInt(lp[1]) - 1, 1);
+  let totalMonths = nMonths;
+  // Extend until max goal reached or maxFuture months after last known
+  let tempVal = last.value;
+  for (let i = 1; i <= maxFuture; i++) {
+    tempVal += avgGrowth;
+    totalMonths++;
+    if (tempVal >= maxGoal) break;
+  }
+
+  // Generate labels + both datasets
+  const labels   = [];
+  const projData = []; // projection from first point
+  const histData = []; // actual, null for future months
+
+  for (let i = 0; i <= totalMonths; i++) {
+    const d = new Date(startDate);
+    d.setMonth(d.getMonth() + i);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const lbl = MNL[d.getMonth()] + "'" + String(d.getFullYear()).slice(2);
+    labels.push(lbl);
+    projData.push(Math.max(0, first.value + avgGrowth * i));
+    histData.push(histMap[key] !== undefined ? histMap[key] : null);
+  }
+
+  // Milestone pills
+  const milestoneInfo = MILESTONES.map(m => {
+    if (m.value <= last.value) return { ...m, done: true };
+    if (avgGrowth <= 0) return { ...m, date: null };
+    const mo = Math.ceil((m.value - last.value) / avgGrowth);
+    const d  = new Date(lastDate);
+    d.setMonth(d.getMonth() + mo);
+    return { ...m, date: d };
+  });
+
+  document.getElementById('proj-milestones').innerHTML = milestoneInfo.map(m => {
+    if (m.done) return '<div style="font-size:12px;padding:6px 12px;border-radius:8px;background:rgba(76,175,125,.15);color:#4caf7d">&#10003; ' + m.label + '</div>';
+    if (!m.date) return '<div style="font-size:12px;padding:6px 12px;border-radius:8px;background:var(--bg3);color:var(--text2)">' + m.label + ' — onbekend</div>';
+    return '<div style="font-size:12px;padding:6px 12px;border-radius:8px;background:rgba(79,195,247,.1);color:#4fc3f7;border:1px solid rgba(79,195,247,.2)">' +
+      m.label + ' &rarr; <strong>' + MNL[m.date.getMonth()] + ' ' + m.date.getFullYear() + '</strong></div>';
+  }).join('');
+
+  // Show every Nth label
+  const step = labels.length > 48 ? 12 : labels.length > 24 ? 6 : labels.length > 12 ? 3 : 1;
+  const sparseLabels = labels.map((l, i) => i % step === 0 ? l : '');
+
+  if (projInst) projInst.destroy();
+  projInst = new Chart(document.getElementById('projChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: sparseLabels,
+      datasets: [
+        {
+          label: 'Verwacht',
+          data: projData,
+          borderColor: 'rgba(79,195,247,.4)',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: true,
+          backgroundColor: 'rgba(79,195,247,.04)',
+          tension: 0.1
+        },
+        {
+          label: 'Werkelijk',
+          data: histData,
+          borderColor: '#4fc3f7',
+          borderWidth: 2.5,
+          pointBackgroundColor: '#4fc3f7',
+          pointBorderColor: '#12141a',
+          pointBorderWidth: 2,
+          pointRadius: function(ctx) { return histData[ctx.dataIndex] !== null ? 4 : 0; },
+          fill: false,
+          tension: 0.3,
+          spanGaps: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d25',
+          borderColor: '#252a38',
+          borderWidth: 1,
+          titleColor: '#8b92a8',
+          bodyColor: '#e8eaf0',
+          padding: 10,
+          filter: function(item) { return item.raw !== null; },
+          callbacks: {
+            label: function(c) {
+              return (c.datasetIndex === 0 ? ' Verwacht: ' : ' Werkelijk: ') + fe(c.raw);
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#4a5168', font: {size:10}, maxRotation: 45 }, grid: { color: '#1e2330' }, border: { color: '#252a38' } },
+        y: { ticks: { color: '#4a5168', font: {size:11}, callback: function(v) { return fk(v); } }, grid: { color: '#1e2330' }, border: { color: '#252a38' } }
+      }
+    }
+  });
+}
+
+restore();
+buildMonthSel();
+// Restore blur state
+if (localStorage.getItem('pf_v4_blur') === '1') {
+  document.getElementById('app-main').classList.add('blurred');
+  const btn = document.getElementById('blur-btn');
+  if (btn) { btn.classList.add('on'); btn.textContent = '👁 Tonen'; }
+}
+// Always show pin first
+document.getElementById('setup').style.display = 'none';
+// pin-screen is already visible from HTML
+</script>
+</body>
+</html>
