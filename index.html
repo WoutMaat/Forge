@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Forge</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -88,7 +88,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 html{background:var(--c-bg);color-scheme:dark}
-body{min-height:100vh;background:var(--c-bg);color:var(--c-text);font-family:var(--font);font-size:var(--fs-m);line-height:1.5;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;background:var(--c-bg);color:var(--c-text);font-family:var(--font);font-size:var(--fs-m);line-height:1.5;-webkit-font-smoothing:antialiased;touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,input,select{font:inherit;color:inherit}
 a{color:inherit}
 :focus-visible{outline:2px solid var(--c-accent);outline-offset:2px}
@@ -239,7 +239,8 @@ a{color:inherit}
 .table th,.table td{overflow:hidden;text-overflow:ellipsis}
 @container (max-width:720px){.table .col-opt-1{display:none}}
 @container (max-width:520px){.table .col-opt-2{display:none}}
-@container (max-width:400px){.table .col-opt-3{display:none}}
+.value-pl{display:none;font-weight:var(--fw-medium)}
+@container (max-width:400px){.table .col-opt-3{display:none}.table .value-pl{display:block}}
 .table th{padding:0 var(--space-3) var(--space-3);font-size:var(--fs-xs);font-weight:var(--fw-medium);color:var(--c-text-3);text-align:left;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
 .table th.num{text-align:right}
 .table td{padding:var(--space-3);border-top:1px solid var(--c-line);vertical-align:middle}
@@ -442,6 +443,8 @@ select.input option{background:var(--c-surface)}
   .data-actions{justify-content:flex-start}
   .input-row{flex-direction:column}
   .field-grid{grid-template-columns:minmax(0,1fr)}
+  /* 16px voorkomt dat iOS inzoomt zodra je in een veld tikt */
+  .input,.input-mono{font-size:16px}
   .toasts{right:var(--space-4);left:var(--space-4);bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--space-3));align-items:stretch}
   .toast{max-width:none}
 }
@@ -1055,6 +1058,13 @@ function plCell(a) {
   return [el('div', {class: cls, text: money(pl.amt, {signed: true})}),
           el('div', {class: 'cell-sub ' + cls, text: pct(pl.pct, {signed: true, digits: 2})})];
 }
+// Waarde, met daaronder het P/L-percentage dat alleen verschijnt als de P/L-kolom op smalle schermen wegvalt.
+function valueCell(a) {
+  if (valueOf(a) == null) return '—';
+  const pl = plOf(a);
+  return [el('div', {text: money(valueOf(a))}),
+          pl ? el('div', {class: 'cell-sub value-pl ' + tone(pl.amt), text: pct(pl.pct, {signed: true, digits: 2})}) : null];
+}
 
 // ── Toasts & bevestiging ───────────────────────────────────
 function toast(msg, kind = 'info') {
@@ -1460,7 +1470,7 @@ function renderPositions() {
     el('td', null, assetCell(a, {badge: true})),
     el('td', {class: 'num col-opt-2'}, priceCell(a)),
     el('td', {class: 'num muted col-opt-1'}, a.type === 'manual' ? '—' : qtyText(a.qty, 4)),
-    el('td', {class: 'num strong'}, valueOf(a) != null ? money(valueOf(a)) : '—'),
+    el('td', {class: 'num strong'}, valueCell(a)),
     el('td', {class: 'num col-opt-3'}, plCell(a))));
   $('pos-body').replaceChildren(...(rows.length ? rows : [el('tr', null, el('td', {colspan: 5, class: 'empty', text: 'Nog geen assets. Voeg ze toe via Assets.'}))]));
 }
@@ -1473,7 +1483,7 @@ function renderAssetsTable() {
       el('td', null, assetCell(a, {badge: true, sub: [a.name, sym].filter(Boolean).join(' · ')})),
       el('td', {class: 'num muted col-opt-1'}, a.type === 'manual' ? '—' : qtyText(a.qty, 6)),
       el('td', {class: 'num col-opt-2'}, priceCell(a)),
-      el('td', {class: 'num strong'}, valueOf(a) != null ? money(valueOf(a)) : '—'),
+      el('td', {class: 'num strong'}, valueCell(a)),
       el('td', {class: 'num col-opt-3'}, plCell(a)),
       el('td', null, el('div', {class: 'row-actions'},
         el('button', {type: 'button', class: 'icon-btn', title: 'Wijzigen', 'aria-label': 'Wijzig ' + a.ticker, onclick: () => openAssetDialog(a.id)}, ic('pencil')),
@@ -2432,6 +2442,9 @@ function bindEvents() {
   });
   window.addEventListener('online', () => { if (syncUser && !$('shell').hidden) pullSync(); });
 }
+
+// Geen knijp-zoom in Safari op iOS (negeert user-scalable=no); het ontwerp past zich zelf aan het scherm aan.
+document.addEventListener('gesturestart', e => e.preventDefault(), {passive: false});
 
 restore();
 buildMonthSel();
