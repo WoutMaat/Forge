@@ -1,6 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100">
-  <rect x="-50" y="-50" width="100" height="100" fill="#12141a" rx="14"/>
-  <polygon points="0,-36 31,-18 31,18 0,36 -31,18 -31,-18" fill="#1a2535" stroke="#4fc3f7" stroke-width="2.5"/>
-  <polyline points="-17,11 -7,-9 3,5 13,-19 25,-9" fill="none" stroke="#4fc3f7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="25" cy="-9" r="4.5" fill="#4fc3f7"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#101217"/>
+  <g transform="translate(32 32) scale(0.78) translate(-33 -37.5)">
+    <path fill="#4fc3f7" d="M10 40H56L46 46H36V52L42 58H17L23 52V46H12Q10 46 10 44Z"/>
+    <rect fill="#4fc3f7" x="23" y="17" width="13" height="19" rx="2"/>
+    <g fill="none" stroke="#4fc3f7" stroke-linecap="round">
+      <path stroke-width="4.5" d="M36 24L57 17"/>
+      <path stroke-width="2.5" d="M19 33L13 27M18 37L10 35M40 33L46 27"/>
+    </g>
+  </g>
 </svg>
