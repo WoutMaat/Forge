@@ -939,6 +939,9 @@ let pinEntry = '';
 let confirmResolve = null;
 let confirmDismissable = true;
 let loadAgain = false;
+let lastLoadAt = 0;                 // tijdstip van de laatste keer koersen ophalen
+const STALE_AFTER = 2 * 60 * 1000;   // daarna worden koersen bij terugkeren opnieuw opgehaald
+const AV_MAX_AGE = 6 * 60 * 60 * 1000;  // Europese ETF's (Alpha Vantage): hooguit eens per 6 uur
 
 // ── Opslag ─────────────────────────────────────────────────
 const store = {
@@ -1418,11 +1421,12 @@ async function fetchStocks(warnings) {
   const noKeys = !avKey && !fhKey;
   const today = new Date().toISOString().slice(0, 10);
 
-  // EU-ETF's via Alpha Vantage, maximaal één keer per dag per symbool.
+  // EU-ETF's via Alpha Vantage: die geeft voor Europese beurzen alleen slotkoersen en staat 25 calls/dag toe.
+  // Daarom per symbool hooguit eens per 6 uur ophalen: zo zie je 's avonds wel de slotkoers van vandaag.
   for (const a of euList) {
     const cacheKey = 'av_cache_' + a.avSym;
     const cached = store.json(cacheKey, null);
-    if (cached && cached.date === today && cached.price > 0) { setPrice(a, cached.price, 'EUR'); continue; }
+    if (cached && cached.price > 0 && cached.t && Date.now() - cached.t < AV_MAX_AGE) { setPrice(a, cached.price, 'EUR'); continue; }
     if (!avKey) {
       if (cached && cached.price > 0) setPrice(a, cached.price, 'EUR');
       else if (!noKeys) warnings.push(a.ticker + ' heeft een Alpha Vantage key nodig (zie Instellingen).');
@@ -1431,7 +1435,7 @@ async function fetchStocks(warnings) {
     try {
       const price = await fetchOneAV(a.avSym, avKey);
       setPrice(a, price, 'EUR');
-      store.set(cacheKey, JSON.stringify({date: today, price}));
+      store.set(cacheKey, JSON.stringify({date: today, price, t: Date.now()}));
     } catch (e) {
       if (cached && cached.price > 0) {
         setPrice(a, cached.price, 'EUR');
@@ -1502,6 +1506,7 @@ async function loadAll() {
   }
   persist();
   const priced = assets.filter(a => a.price != null).length;
+  lastLoadAt = Date.now();
   const time = new Date().toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
   const state = !priced && assets.length ? 'err' : warnings.length ? 'warn' : 'ok';
   setStatus(state, 'Bijgewerkt om ' + time, priced + '/' + assets.length + ' assets geladen');
@@ -2692,6 +2697,15 @@ function bindEvents() {
     if (document.hidden) { if (syncTimer) pushSync(); }
     else pullSync();
   });
+  // Terug in de app (iOS laat hem vaak op de achtergrond staan): koersen vernieuwen als ze
+  // ouder zijn dan 2 minuten. ETF's via Alpha Vantage blijven één keer per dag (eigen cache).
+  const refreshIfStale = () => {
+    if (document.hidden || $('shell').hidden) return;
+    if (Date.now() - lastLoadAt > STALE_AFTER) loadAll();
+  };
+  document.addEventListener('visibilitychange', refreshIfStale);
+  window.addEventListener('pageshow', e => { if (e.persisted) refreshIfStale(); });
+  window.addEventListener('focus', refreshIfStale);
   window.addEventListener('online', () => { if (syncUser && !$('shell').hidden) pullSync(); });
 }
 
