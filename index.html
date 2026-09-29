@@ -1099,7 +1099,10 @@ function logoKey(a) {
 function logoUrl(a) {
   const k = logoKey(a);
   const e = k && logos[k];
-  return e && typeof e.url === 'string' && e.url.startsWith('https://') ? e.url : null;
+  if (e && typeof e.url === 'string' && e.url.startsWith('https://')) return e.url;
+  // Bekende coins: vast icoon van een icoon-CDN, zonder API-verzoek. Laadt het niet, dan initialen.
+  if (a.type === 'crypto' && BINANCE_BASE[a.cgId]) return 'https://assets.coincap.io/assets/icons/' + BINANCE_BASE[a.cgId].toLowerCase() + '@2x.png';
+  return null;
 }
 function colorIndex(str) {
   let h = 0;
@@ -1263,10 +1266,39 @@ async function fetchEurRate() {
   } catch (e) {}
 }
 
-// CoinGecko zonder key staat maar een paar verzoeken per minuut toe (per internetverbinding).
-// Daarom: één verzoek voor alle koersen, logo's alleen als ze ontbreken, hooguit eens per
-// 5 minuten ophalen, en per coin de laatst bekende koers bewaren om op terug te vallen.
+// Cryptokoersen: eerst Binance (geen key, ruime limieten), CoinGecko alleen voor coins die we niet
+// zeker bij Binance kunnen vinden. Hooguit eens per 5 minuten ophalen, en per coin de laatst
+// bekende koers bewaren om op terug te vallen.
 const CG_MIN_INTERVAL = 5 * 60 * 1000;
+
+// CoinGecko-ID → symbool op Binance. Bewust een vaste lijst: tickers zijn niet uniek
+// (jouw "PORTAL" op CoinGecko is een andere coin dan PORTAL op Binance).
+const BINANCE_BASE = {
+  bitcoin: 'BTC', ethereum: 'ETH', solana: 'SOL', ripple: 'XRP', cardano: 'ADA',
+  dogecoin: 'DOGE', polkadot: 'DOT', chainlink: 'LINK', litecoin: 'LTC', 'avalanche-2': 'AVAX',
+  binancecoin: 'BNB', tron: 'TRX', 'shiba-inu': 'SHIB', near: 'NEAR', uniswap: 'UNI',
+  stellar: 'XLM', sui: 'SUI', pepe: 'PEPE', 'the-open-network': 'TON', 'polygon-ecosystem-token': 'POL',
+};
+
+// Koersen in euro van Binance voor de coins in BINANCE_BASE. Heeft een coin geen EUR-paar,
+// dan nemen we het USDT-paar en rekenen we om met de dollarkoers.
+async function fetchBinancePrices(ids) {
+  const wanted = ids.filter(id => BINANCE_BASE[id]);
+  if (!wanted.length) return {};
+  const r = await fetch('https://api.binance.com/api/v3/ticker/price', {signal: AbortSignal.timeout(10000)});
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const list = await r.json();
+  const bySymbol = new Map((Array.isArray(list) ? list : []).map(t => [t.symbol, parseFloat(t.price)]));
+  const out = {};
+  wanted.forEach(id => {
+    const base = BINANCE_BASE[id];
+    const eur = bySymbol.get(base + 'EUR');
+    const usdt = bySymbol.get(base + 'USDT');
+    if (eur > 0) out[id] = eur;
+    else if (usdt > 0) out[id] = usdt * eurRate;
+  });
+  return out;
+}
 const cgUrl = (path, ids) => 'https://api.coingecko.com/api/v3/' + path + '&ids=' + encodeURIComponent(ids.join(','));
 
 // Laatst bekende koersen: {bitcoin: {price, t}, ...}. Alleen op dit apparaat, niet in de sync.
@@ -1290,31 +1322,46 @@ async function fetchCrypto(warnings) {
   const cache = cgCache();
   const now = Date.now();
 
-  // Net nog opgehaald? Dan de bewaarde koersen gebruiken en CoinGecko met rust laten.
+  // Net nog opgehaald? Dan de bewaarde koersen gebruiken en de koersdiensten met rust laten.
   const fresh = ids.every(id => cache[id] && now - cache[id].t < CG_MIN_INTERVAL);
   if (fresh) { useCachedCrypto(list); return; }
 
-  try {
-    const r = await fetch(cgUrl('simple/price?vs_currencies=eur', ids), {signal: AbortSignal.timeout(10000)});
-    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), {limit: r.status === 429 || r.status === 403});
-    const d = await r.json();
-    ids.forEach(id => { if (d[id] && typeof d[id].eur === 'number') cache[id] = {price: d[id].eur, t: now}; });
-    store.set('pf_v4_cg_cache', JSON.stringify(cache));
-    list.forEach(a => { if (d[a.cgId] && typeof d[a.cgId].eur === 'number') setPrice(a, d[a.cgId].eur, 'EUR'); });
-    const unknown = ids.filter(id => !d[id]);
-    if (unknown.length) warnings.push('CoinGecko kent ' + unknown.join(', ') + ' niet.');
-  } catch (e) {
-    // Limiet bereikt of geen verbinding (een blokkade van CoinGecko komt in de browser binnen als netwerkfout).
-    const since = useCachedCrypto(list);
-    const when = since ? ' (van ' + new Date(since).toLocaleString('nl-NL', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + ')' : '';
-    warnings.push(since
-      ? 'CoinGecko is even niet bereikbaar, laatst bekende cryptokoersen gebruikt' + when + '.'
-      : 'CoinGecko is even niet bereikbaar. Probeer het over een paar minuten opnieuw.');
-    return;
+  // 1. Binance voor de bekende coins.
+  const prices = {};
+  try { Object.assign(prices, await fetchBinancePrices(ids)); } catch (e) { console.warn('Binance:', e); }
+
+  // 2. CoinGecko voor wat overblijft (bijv. kleine coins). Een blokkade komt als netwerkfout binnen.
+  const rest = ids.filter(id => !(id in prices));
+  if (rest.length) {
+    try {
+      const r = await fetch(cgUrl('simple/price?vs_currencies=eur', rest), {signal: AbortSignal.timeout(10000)});
+      if (r.ok) {
+        const d = await r.json();
+        rest.forEach(id => { if (d[id] && typeof d[id].eur === 'number') prices[id] = d[id].eur; });
+      }
+    } catch (e) { console.warn('CoinGecko:', e); }
   }
 
-  // Logo's: alleen voor coins zonder (geldig) logo. Mislukt dit, dan is dat niet erg.
+  // 3. Opslaan wat binnenkwam; voor de rest de laatst bekende koers.
+  ids.forEach(id => { if (id in prices) cache[id] = {price: prices[id], t: now}; });
+  store.set('pf_v4_cg_cache', JSON.stringify(cache));
+  const missing = [];
+  list.forEach(a => {
+    if (a.cgId in prices) setPrice(a, prices[a.cgId], 'EUR');
+    else if (!missing.includes(a)) missing.push(a);
+  });
+  if (missing.length) {
+    const since = useCachedCrypto(missing);
+    const names = [...new Set(missing.map(a => a.ticker))].join(', ');
+    const when = since ? ' (van ' + new Date(since).toLocaleString('nl-NL', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + ')' : '';
+    warnings.push(since
+      ? 'Koers van ' + names + ' niet bereikbaar, laatst bekende koers gebruikt' + when + '.'
+      : 'Koers van ' + names + ' kon niet worden opgehaald. Probeer het later opnieuw.');
+  }
+
+  // Logo's via CoinGecko alleen voor coins die geen vast icoon hebben en nog geen (geldig) logo.
   const needLogo = ids.filter(id => {
+    if (BINANCE_BASE[id]) return false;
     const e = logos['cg:' + id];
     return !e || now - e.t > (e.url ? LOGO_TTL_FOUND : LOGO_TTL_MISSING);
   });
@@ -1333,9 +1380,10 @@ async function fetchCrypto(warnings) {
   } catch (e) {}
 }
 
+// Alpha Vantage is soms traag (20–30 s). Daarom een ruime time-out en een begrijpelijke melding.
 async function fetchOneAV(sym, key) {
-  const r = await fetch('https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + encodeURIComponent(sym) + '&apikey=' + encodeURIComponent(key), {signal: AbortSignal.timeout(12000)});
-  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const r = await fetch('https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=' + encodeURIComponent(sym) + '&apikey=' + encodeURIComponent(key), {signal: AbortSignal.timeout(30000)});
+  if (!r.ok) throw new Error(r.status >= 500 ? 'Alpha Vantage is even overbelast, probeer het later opnieuw' : 'HTTP ' + r.status);
   const d = await r.json();
   if (d['Note'] || d['Information']) { const e = new Error('Alpha Vantage daglimiet bereikt (25/dag)'); e.isLimit = true; throw e; }
   if (d['Error Message']) throw new Error('Alpha Vantage weigert het verzoek');
@@ -1383,7 +1431,7 @@ async function fetchStocks(warnings) {
         setPrice(a, cached.price, 'EUR');
         if (e.isLimit) warnings.push('Alpha Vantage daglimiet bereikt: laatst bekende koers van ' + a.ticker + ' gebruikt.');
       } else {
-        warnings.push(a.ticker + ': ' + e.message + '.');
+        warnings.push(a.ticker + ': ' + (e.name === 'TimeoutError' || e.name === 'AbortError' ? 'Alpha Vantage reageert niet (te traag), probeer het later opnieuw' : e.message) + '.');
       }
     }
     renderAll();
