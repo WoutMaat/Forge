@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Forge">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-40 -40 80 80'><polygon points='0,-36 31,-18 31,18 0,36 -31,18 -31,-18' fill='%231a1d25' stroke='%234fc3f7' stroke-width='2'/><polyline points='-16,10 -6,-8 4,4 14,-18 24,-8' fill='none' stroke='%234fc3f7' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/><circle cx='24' cy='-8' r='3' fill='%234fc3f7'/></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='7 11.5 52 52'><g fill='%234fc3f7'><path d='M10 40H56L46 46H36V52L42 58H17L23 52V46H12Q10 46 10 44Z'/><rect x='23' y='17' width='13' height='19' rx='2'/></g><g fill='none' stroke='%234fc3f7' stroke-linecap='round'><path stroke-width='4.5' d='M36 24L57 17'/><path stroke-width='2.5' d='M19 33L13 27M18 37L10 35M40 33L46 27'/></g></svg>">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lucide@1.48.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
@@ -38,6 +38,7 @@
   --c-neg-soft:rgba(240,96,96,.13);
   --c-neg-line:rgba(240,96,96,.32);
   --c-warn:#ffb74d;
+  --c-sat:#e8914f;
   --c-overlay:rgba(5,7,10,.72);
   --c-logo-bg:#ffffff;
 
@@ -104,9 +105,8 @@ a{color:inherit}
 
 /* Logo */
 .logo{flex:none}
-.logo-hex{fill:var(--c-surface-2);stroke:var(--c-accent);stroke-width:2}
-.logo-line{fill:none;stroke:var(--c-accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-.logo-dot{fill:var(--c-accent)}
+.logo-fill{fill:var(--c-accent)}
+.logo-stroke{fill:none;stroke:var(--c-accent);stroke-linecap:round}
 
 /* ── Knoppen ────────────────────────────────────────────── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);height:var(--control-h);padding:0 var(--space-4);border:1px solid transparent;border-radius:var(--radius-m);font-size:var(--fs-s);font-weight:var(--fw-semibold);text-decoration:none;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
@@ -216,12 +216,13 @@ a{color:inherit}
 /* Avatar (logo of initialen) */
 .avatar{position:relative;display:inline-grid;place-items:center;flex:none;width:var(--avatar);height:var(--avatar);border-radius:var(--radius-full);overflow:hidden;background:var(--av);color:var(--c-on-accent);font-size:var(--fs-2xs);font-weight:var(--fw-bold);letter-spacing:.02em}
 .avatar-s{width:var(--avatar-s);height:var(--avatar-s);font-size:8px}
-.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .2s}
+/* Het logo vult de hele cirkel (cover): de hoeken van vierkante logo's vallen buiten de ronding,
+   zodat je geen vierkant-in-een-cirkel ziet. Doorzichtige aandelenlogo's krijgen een witte ondergrond. */
+.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .2s}
 .avatar.has-img{background:var(--c-surface-3)}
 .avatar.has-img img{opacity:1}
 .avatar.has-img .avatar-txt{visibility:hidden}
 .avatar-stock.has-img,.avatar-etf.has-img{background:var(--c-logo-bg)}
-.avatar-stock img,.avatar-etf img{inset:3px;width:calc(100% - 6px);height:calc(100% - 6px)}
 .av-0{--av:#4fc3f7}.av-1{--av:#81b4ea}.av-2{--av:#b39ddb}.av-3{--av:#4db6ac}.av-4{--av:#aed581}
 .av-5{--av:#ffb74d}.av-6{--av:#f48fb1}.av-7{--av:#80deea}.av-8{--av:#ce93d8}.av-9{--av:#e6c07b}
 
@@ -229,7 +230,8 @@ a{color:inherit}
 .asset-meta{display:flex;flex-direction:column;min-width:0}
 .asset-line{display:flex;align-items:center;gap:var(--space-2);min-width:0;overflow:hidden}
 .asset-ticker{font-weight:var(--fw-semibold);color:var(--c-text)}
-.asset-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-s);color:var(--c-text-3)}
+.asset-name,.asset-trade{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-s);color:var(--c-text-3)}
+.asset-trade{display:none;font-variant-numeric:tabular-nums}
 
 /* Tabellen */
 /* Tabellen passen altijd in hun kaart: vaste kolomverdeling, en bij weinig ruimte
@@ -257,8 +259,19 @@ a{color:inherit}
   .table th,.table td{padding-inline:var(--space-2)}
   .table .col-actions{width:72px}
 }
-@container (max-width:400px){.table .asset-line .badge{display:none}}
+/* Telefoon: twee regels per positie, zoals in Trading 212.
+   Links: ticker / aantal × koers. Rechts: waarde / winst of verlies in € en %.
+   De actieknoppen verdwijnen; je tikt op de rij om te wijzigen. */
+@container (max-width:400px){
+  .table .asset-line .badge{display:none}
+  .table .asset-cell.has-trade .asset-name{display:none}
+  .table .asset-trade{display:block}
+  .table th.num{width:150px}
+  .table .col-edit{display:none}
+}
 .row-actions{display:flex;justify-content:flex-end;gap:var(--space-1)}
+.row-link{cursor:pointer}
+.row-link:focus-visible{outline:2px solid var(--c-accent);outline-offset:-2px}
 
 /* Toon (na .cell-sub, zodat de kleur wint) */
 .tone-pos{color:var(--c-pos)}
@@ -311,6 +324,21 @@ a{color:inherit}
 .legend-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--c-text-2)}
 .legend-name b{font-weight:var(--fw-semibold);color:var(--c-text);margin-right:var(--space-1)}
 .legend-pct{color:var(--c-text);font-weight:var(--fw-medium)}
+/* Kern / satelliet */
+.coresat{display:flex;flex-direction:column;gap:var(--space-2);margin-top:var(--space-5);padding-top:var(--space-4);border-top:1px solid var(--c-line)}
+.coresat-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-2)}
+.coresat-head .card-title{margin:0}
+.coresat-target{font-size:var(--fs-xs);color:var(--c-text-3)}
+.coresat-bar{position:relative;height:10px;border-radius:var(--radius-full);background:var(--c-sat);overflow:visible}
+.coresat-core{height:100%;width:var(--core,0%);border-radius:var(--radius-full) 0 0 var(--radius-full);background:var(--c-accent)}
+.coresat-bar.is-masked .coresat-core{width:0}
+.coresat-bar.is-masked{background:var(--c-surface-3)}
+.coresat-marker{position:absolute;top:-4px;bottom:-4px;left:var(--target,80%);width:2px;margin-left:-1px;border-radius:1px;background:var(--c-text)}
+.coresat-legend{display:flex;justify-content:space-between;gap:var(--space-3);font-size:var(--fs-s);color:var(--c-text-2)}
+.coresat-legend b{color:var(--c-text);font-weight:var(--fw-semibold)}
+.coresat-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;background:var(--c-accent)}
+.coresat-dot.is-sat{background:var(--c-sat)}
+.coresat-status{font-size:var(--fs-s);color:var(--c-text-2)}
 
 /* ── Groei ──────────────────────────────────────────────── */
 .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3)}
@@ -391,6 +419,9 @@ select.input option{background:var(--c-surface)}
 .check{display:inline-flex;align-items:center;gap:var(--space-2);font-size:var(--fs-s);color:var(--c-text-2);cursor:pointer}
 .check input{accent-color:var(--c-accent)}
 .settings-card-plain{gap:0}
+.percent-input{display:flex;align-items:center;gap:var(--space-2);flex:none;color:var(--c-text-2)}
+.percent-input .input{width:72px;text-align:right}
+.dialog-delete{margin-right:auto}
 
 /* ── Dialogen & toasts ──────────────────────────────────── */
 .dialog{width:min(460px,calc(100vw - 32px));max-height:calc(100dvh - 32px);margin:auto;padding:0;border:1px solid var(--c-line-strong);border-radius:var(--radius-l);background:var(--c-surface);color:var(--c-text);box-shadow:var(--shadow)}
@@ -456,7 +487,7 @@ select.input option{background:var(--c-surface)}
 <div class="pin-screen" id="pin-screen">
   <div class="pin-box">
     <div class="pin-brand">
-      <svg class="logo" width="44" height="44" viewBox="-40 -40 80 80" aria-hidden="true"><polygon class="logo-hex" points="0,-36 31,-18 31,18 0,36 -31,18 -31,-18"/><polyline class="logo-line" points="-16,10 -6,-8 4,4 14,-18 24,-8"/><circle class="logo-dot" cx="24" cy="-8" r="3"/></svg>
+      <svg class="logo" width="44" height="44" viewBox="7 11.5 52 52" aria-hidden="true"><path class="logo-fill" d="M10 40H56L46 46H36V52L42 58H17L23 52V46H12Q10 46 10 44Z"/><rect class="logo-fill" x="23" y="17" width="13" height="19" rx="2"/><path class="logo-stroke" stroke-width="4.5" d="M36 24L57 17"/><path class="logo-stroke" stroke-width="2.5" d="M19 33L13 27M18 37L10 35M40 33L46 27"/></svg>
       <span>Forge</span>
     </div>
     <p class="pin-sub">Voer je pincode in</p>
@@ -485,7 +516,7 @@ select.input option{background:var(--c-surface)}
 <div class="shell" id="shell" hidden>
   <aside class="sidebar">
     <div class="brand">
-      <svg class="logo" width="30" height="30" viewBox="-40 -40 80 80" aria-hidden="true"><polygon class="logo-hex" points="0,-36 31,-18 31,18 0,36 -31,18 -31,-18"/><polyline class="logo-line" points="-16,10 -6,-8 4,4 14,-18 24,-8"/><circle class="logo-dot" cx="24" cy="-8" r="3"/></svg>
+      <svg class="logo" width="30" height="30" viewBox="7 11.5 52 52" aria-hidden="true"><path class="logo-fill" d="M10 40H56L46 46H36V52L42 58H17L23 52V46H12Q10 46 10 44Z"/><rect class="logo-fill" x="23" y="17" width="13" height="19" rx="2"/><path class="logo-stroke" stroke-width="4.5" d="M36 24L57 17"/><path class="logo-stroke" stroke-width="2.5" d="M19 33L13 27M18 37L10 35M40 33L46 27"/></svg>
       <span class="brand-name">Forge</span>
     </div>
     <nav class="nav" aria-label="Hoofdmenu">
@@ -574,6 +605,15 @@ select.input option{background:var(--c-surface)}
               <p class="donut-empty" id="pie-empty" hidden>Nog geen prijzen geladen</p>
             </div>
             <ul class="legend" id="pie-legend"></ul>
+            <div class="coresat" id="coresat" hidden>
+              <div class="coresat-head"><h3 class="card-title">Kern / satelliet</h3><span class="coresat-target" id="coresat-target"></span></div>
+              <div class="coresat-bar" id="coresat-bar"><div class="coresat-core"></div><span class="coresat-marker" title="Doel"></span></div>
+              <div class="coresat-legend">
+                <span><span class="coresat-dot"></span>Kern <b class="tnum" id="coresat-core"></b></span>
+                <span><span class="coresat-dot is-sat"></span>Satelliet <b class="tnum" id="coresat-sat"></b></span>
+              </div>
+              <p class="coresat-status" id="coresat-status"></p>
+            </div>
           </div>
           <div class="card">
             <h2 class="card-title">Posities</h2>
@@ -596,7 +636,7 @@ select.input option{background:var(--c-surface)}
         <div class="card card-flush">
           <div class="table-wrap">
             <table class="table">
-              <thead><tr><th class="col-asset">Asset</th><th class="num col-opt-1">Aantal</th><th class="num col-opt-2">Koers</th><th class="num">Waarde</th><th class="num col-opt-3">P/L</th><th class="col-actions"><span class="sr-only">Acties</span></th></tr></thead>
+              <thead><tr><th class="col-asset">Asset</th><th class="num col-opt-1">Aantal</th><th class="num col-opt-2">Koers</th><th class="num">Waarde</th><th class="num col-opt-3">P/L</th><th class="col-actions col-edit"><span class="sr-only">Acties</span></th></tr></thead>
               <tbody id="assets-body"></tbody>
             </table>
           </div>
@@ -733,6 +773,22 @@ select.input option{background:var(--c-surface)}
             </div>
           </section>
 
+          <section class="settings-section" aria-labelledby="set-coresat">
+            <div class="settings-intro">
+              <h2 id="set-coresat"><i data-lucide="chart-pie" class="icon"></i>Kern / satelliet</h2>
+              <p>Welk deel van je beleggingen in de kern zit. Spaargeld en cash tellen niet mee. De rol per positie stel je in bij Assets → Wijzigen.</p>
+            </div>
+            <div class="card">
+              <label class="toggle-row">
+                <span class="toggle-text">
+                  <span class="toggle-title">Doel voor de kern</span>
+                  <span class="field-hint">De rest is satelliet. Bij 80 is je doel dus 80/20.</span>
+                </span>
+                <span class="percent-input"><input class="input tnum" id="core-target" type="text" inputmode="numeric" autocomplete="off" aria-label="Doel voor de kern in procent"><span>%</span></span>
+              </label>
+            </div>
+          </section>
+
           <section class="settings-section" aria-labelledby="set-privacy">
             <div class="settings-intro">
               <h2 id="set-privacy"><i data-lucide="shield-check" class="icon"></i>Privacy</h2>
@@ -802,12 +858,19 @@ select.input option{background:var(--c-surface)}
     </div>
     <label class="field"><span class="field-label">Naam</span><input class="input" id="f-name" autocomplete="off" placeholder="Bijv. Vanguard FTSE All-World"></label>
     <label class="field" id="row-qty"><span class="field-label">Aantal eenheden</span><input class="input js-sensitive" id="f-qty" type="text" inputmode="decimal" autocomplete="off" placeholder="Bijv. 1,25"></label>
+    <label class="field" id="row-role"><span class="field-label">Rol in je portfolio</span>
+      <select class="input" id="f-role">
+        <option value="core">Kern (bijv. wereldwijde ETF)</option>
+        <option value="satellite">Satelliet (hoger risico)</option>
+      </select>
+    </label>
     <label class="field" id="row-buyprice"><span class="field-label">Gemiddelde aankoopprijs (€) <span class="field-optional">· optioneel, voor P/L</span></span><input class="input js-sensitive" id="f-buyprice" type="text" inputmode="decimal" autocomplete="off" placeholder="Bijv. 98,50"></label>
     <label class="field" id="row-manual-val" hidden><span class="field-label">Waarde (€)</span><input class="input js-sensitive" id="f-manual-val" type="text" inputmode="decimal" autocomplete="off" placeholder="Bijv. 5000"><span class="field-hint">Totaalbedrag in euro. Wordt niet automatisch bijgewerkt.</span></label>
     <label class="field" id="row-av"><span class="field-label">Koerssymbool</span><input class="input input-mono" id="f-av" autocomplete="off" spellcheck="false" placeholder="Bijv. TSLA of VWCE.FRK">
       <span class="field-hint">US-aandelen (via Finnhub): gewone ticker, bijv. TSLA, META.<br>EU-ETF's (via Alpha Vantage): ticker + beurs, bijv. VWCE.FRK (Frankfurt), WQTM.DEX (XETRA), VWCE.AMS (Amsterdam).</span></label>
     <label class="field" id="row-cg" hidden><span class="field-label">CoinGecko-ID</span><input class="input input-mono" id="f-cg" autocomplete="off" spellcheck="false" placeholder="Bijv. bitcoin, solana, ripple"><span class="field-hint">Staat in de URL van de coin op coingecko.com.</span></label>
     <div class="dialog-actions">
+      <button type="button" class="btn btn-danger dialog-delete" id="asset-delete" hidden>Verwijderen</button>
       <button type="button" class="btn btn-ghost" id="asset-cancel">Annuleren</button>
       <button type="button" class="btn btn-primary" id="asset-save">Opslaan</button>
     </div>
@@ -985,6 +1048,28 @@ const valueOf = a => a.price != null ? a.qty * a.price : null;
 const total = () => assets.reduce((s, a) => s + (a.price ? a.qty * a.price : 0), 0);
 const byValue = () => [...assets].sort((a, b) => (valueOf(b) ?? -1) - (valueOf(a) ?? -1));
 
+// Kern of satelliet. Handmatige posities (spaargeld/cash) doen niet mee.
+// Staat er nog niets ingesteld, dan is een ETF standaard kern en de rest satelliet.
+function roleOf(a) {
+  if (a.type === 'manual') return null;
+  if (a.role === 'core' || a.role === 'satellite') return a.role;
+  return a.type === 'etf' ? 'core' : 'satellite';
+}
+function getCoreTarget() {
+  const v = parseInt(store.get('pf_v4_core_target', ''), 10);
+  return v >= 1 && v <= 99 ? v : 80;
+}
+// Waarde van kern en satelliet (alleen posities met een koers).
+function coreSatellite() {
+  let core = 0, sat = 0;
+  assets.forEach(a => {
+    const v = valueOf(a);
+    if (v == null || roleOf(a) == null) return;
+    if (roleOf(a) === 'core') core += v; else sat += v;
+  });
+  return {core, sat, total: core + sat};
+}
+
 function plOf(a) {
   if (a.price == null || a.buyPrice == null || a.type === 'manual') return null;
   return {amt: (a.price - a.buyPrice) * a.qty, pct: ((a.price - a.buyPrice) / a.buyPrice) * 100};
@@ -1037,12 +1122,22 @@ function avatar(a, small = false) {
   return wrap;
 }
 function typeBadge(type) { return el('span', {class: 'badge badge-' + type, text: TYPE_LABEL[type] || type}); }
+// "117,09 × €169,64": aantal maal koers. Crypto krijgt meer decimalen (0,0718 BTC).
+// Bij verbergen blijft de koers zichtbaar, het aantal niet.
+function tradeText(a) {
+  if (a.type === 'manual' || a.price == null) return null;
+  return qtyText(a.qty, a.type === 'crypto' ? 6 : 2) + ' × ' + unitEur(a.price);
+}
 function assetCell(a, {badge = false, sub = null} = {}) {
-  return el('div', {class: 'asset-cell'},
+  const trade = tradeText(a);
+  // Op brede schermen staat onder de ticker de naam; op de telefoon (smalle tabel)
+  // wisselt CSS die om voor "aantal × koers", omdat Aantal en Koers daar geen eigen kolom hebben.
+  return el('div', {class: 'asset-cell' + (trade ? ' has-trade' : '')},
     avatar(a),
     el('div', {class: 'asset-meta'},
       el('div', {class: 'asset-line'}, el('span', {class: 'asset-ticker', text: a.ticker}), badge ? typeBadge(a.type) : null),
-      el('span', {class: 'asset-name', text: sub ?? a.name ?? ''})));
+      el('span', {class: 'asset-name', text: sub ?? a.name ?? ''}),
+      trade ? el('span', {class: 'asset-trade', text: trade}) : null));
 }
 function priceCell(a) {
   if (a.price == null) return el('span', {class: 'muted', text: '—'});
@@ -1058,12 +1153,14 @@ function plCell(a) {
   return [el('div', {class: cls, text: money(pl.amt, {signed: true})}),
           el('div', {class: 'cell-sub ' + cls, text: pct(pl.pct, {signed: true, digits: 2})})];
 }
-// Waarde, met daaronder het P/L-percentage dat alleen verschijnt als de P/L-kolom op smalle schermen wegvalt.
+// Waarde, met daaronder winst/verlies in € en % ("+€2.005,72 (+11,23%)").
+// Die regel verschijnt alleen als de P/L-kolom op smalle schermen wegvalt.
 function valueCell(a) {
   if (valueOf(a) == null) return '—';
   const pl = plOf(a);
+  const plText = pl && (hidden ? MASK : money(pl.amt, {signed: true}) + ' (' + pct(pl.pct, {signed: true, digits: 2}) + ')');
   return [el('div', {text: money(valueOf(a))}),
-          pl ? el('div', {class: 'cell-sub value-pl ' + tone(pl.amt), text: pct(pl.pct, {signed: true, digits: 2})}) : null];
+          pl ? el('div', {class: 'cell-sub value-pl ' + tone(pl.amt), text: plText}) : null];
 }
 
 // ── Toasts & bevestiging ───────────────────────────────────
@@ -1381,6 +1478,7 @@ function renderDashboard() {
 
   renderMilestone(t);
   renderPie();
+  renderCoreSat();
   renderPositions();
 }
 
@@ -1465,6 +1563,35 @@ function renderPie() {
   }));
 }
 
+// Kern/satelliet-balk onder de allocatie: hoeveel % kern, waar ligt je doel,
+// en hoeveel moet je bijkopen om weer op doel te komen.
+function renderCoreSat() {
+  const {core, sat, total: invested} = coreSatellite();
+  const box = $('coresat');
+  box.hidden = invested <= 0;
+  if (box.hidden) return;
+  const target = getCoreTarget();
+  const corePct = (core / invested) * 100;
+  const diff = corePct - target;
+
+  const bar = $('coresat-bar');
+  bar.classList.toggle('is-masked', hidden);
+  bar.style.setProperty('--core', corePct.toFixed(2) + '%');
+  bar.style.setProperty('--target', target + '%');
+  $('coresat-target').textContent = 'doel ' + target + '/' + (100 - target);
+  $('coresat-core').textContent = pct(corePct);
+  $('coresat-sat').textContent = pct(100 - corePct);
+
+  // Bijkopen om op doel te komen, zonder iets te verkopen:
+  // (core + x) / (invested + x) = t  →  x = (t·invested − core) / (1 − t)
+  const t = target / 100;
+  let status;
+  if (Math.abs(diff) < 1) status = 'Op doel.';
+  else if (diff < 0) status = nf(-diff, 1, 1) + '% onder doel · koop ' + eur((t * invested - core) / (1 - t)) + ' kern bij om op ' + target + '/' + (100 - target) + ' te komen.';
+  else status = nf(diff, 1, 1) + '% boven doel · koop ' + eur(((1 - t) * invested - sat) / t) + ' satelliet bij om op ' + target + '/' + (100 - target) + ' te komen.';
+  $('coresat-status').textContent = hidden ? MASK : status;
+}
+
 function renderPositions() {
   const rows = byValue().map(a => el('tr', null,
     el('td', null, assetCell(a, {badge: true})),
@@ -1479,15 +1606,19 @@ function renderAssetsTable() {
   $('assets-count').textContent = plural(assets.length, 'asset', 'assets');
   const rows = byValue().map(a => {
     const sym = a.type === 'crypto' ? a.cgId : a.type === 'manual' ? '' : a.avSym;
-    return el('tr', null,
+    // De hele rij opent het wijzigformulier: op de telefoon zijn de knoppen verborgen.
+    const open = () => openAssetDialog(a.id);
+    const stop = fn => e => { e.stopPropagation(); fn(); };
+    return el('tr', {class: 'row-link', tabindex: '0', 'aria-label': a.ticker + ' wijzigen', onclick: open,
+                     onkeydown: e => { if (e.key === 'Enter') open(); }},
       el('td', null, assetCell(a, {badge: true, sub: [a.name, sym].filter(Boolean).join(' · ')})),
       el('td', {class: 'num muted col-opt-1'}, a.type === 'manual' ? '—' : qtyText(a.qty, 6)),
       el('td', {class: 'num col-opt-2'}, priceCell(a)),
       el('td', {class: 'num strong'}, valueCell(a)),
       el('td', {class: 'num col-opt-3'}, plCell(a)),
-      el('td', null, el('div', {class: 'row-actions'},
-        el('button', {type: 'button', class: 'icon-btn', title: 'Wijzigen', 'aria-label': 'Wijzig ' + a.ticker, onclick: () => openAssetDialog(a.id)}, ic('pencil')),
-        el('button', {type: 'button', class: 'icon-btn icon-btn-danger', title: 'Verwijderen', 'aria-label': 'Verwijder ' + a.ticker, onclick: () => deleteAsset(a.id)}, ic('trash-2')))));
+      el('td', {class: 'col-edit'}, el('div', {class: 'row-actions'},
+        el('button', {type: 'button', class: 'icon-btn', title: 'Wijzigen', 'aria-label': 'Wijzig ' + a.ticker, onclick: stop(open)}, ic('pencil')),
+        el('button', {type: 'button', class: 'icon-btn icon-btn-danger', title: 'Verwijderen', 'aria-label': 'Verwijder ' + a.ticker, onclick: stop(() => deleteAsset(a.id))}, ic('trash-2')))));
   });
   $('assets-body').replaceChildren(...(rows.length ? rows : [el('tr', null, el('td', {colspan: 6, class: 'empty', text: 'Nog geen assets. Klik op "Asset toevoegen".'}))]));
 }
@@ -1520,6 +1651,7 @@ function toggleFields() {
   const t = $('f-type').value;
   const manual = t === 'manual', crypto = t === 'crypto';
   $('row-qty').hidden = manual;
+  $('row-role').hidden = manual;
   $('row-buyprice').hidden = manual;
   $('row-manual-val').hidden = !manual;
   $('row-av').hidden = crypto || manual;
@@ -1537,6 +1669,8 @@ function openAssetDialog(id) {
   $('f-manual-val').value = a && a.type === 'manual' && a.price != null ? nf(a.price, 0, 2) : '';
   $('f-av').value = a ? a.avSym || '' : '';
   $('f-cg').value = a ? a.cgId || '' : '';
+  $('f-role').value = a ? roleOf(a) || 'core' : 'core';
+  $('asset-delete').hidden = !a;
   toggleFields();
   applyInputMasking();
   $('asset-dialog').showModal();
@@ -1560,9 +1694,10 @@ function saveAsset() {
   if (type !== 'manual' && !(Number.isFinite(qty) && qty > 0)) { toast('Vul een geldig aantal in.', 'err'); $('f-qty').focus(); return; }
   if (type === 'crypto' && !cgId) { toast('Vul het CoinGecko-ID in.', 'err'); $('f-cg').focus(); return; }
 
+  const role = $('f-role').value === 'satellite' ? 'satellite' : 'core';
   const fields = type === 'manual'
-    ? {ticker, name, type, qty: 1, avSym: '', cgId: '', buyPrice: null, price: manualVal, rawP: manualVal, rawC: 'EUR'}
-    : {ticker, name, type, qty, avSym: type === 'crypto' ? '' : avSym, cgId: type === 'crypto' ? cgId : '', buyPrice, price: null, rawP: null, rawC: null};
+    ? {ticker, name, type, qty: 1, avSym: '', cgId: '', buyPrice: null, role: null, price: manualVal, rawP: manualVal, rawC: 'EUR'}
+    : {ticker, name, type, qty, avSym: type === 'crypto' ? '' : avSym, cgId: type === 'crypto' ? cgId : '', buyPrice, role, price: null, rawP: null, rawC: null};
 
   if (editId) Object.assign(assets.find(x => x.id === editId), fields);
   else assets.push({id: nextId++, ...fields});
@@ -1840,8 +1975,20 @@ function renderSettings() {
   $('fh-key').value = getFhKey();
   $('av-key').value = getAvKey();
   $('start-hidden').checked = store.get('pf_v4_start_hidden') === '1';
+  $('core-target').value = String(getCoreTarget());
   renderMilestoneList();
   refreshIcons();
+}
+
+function saveCoreTarget() {
+  const input = $('core-target');
+  const v = parseInt(input.value, 10);
+  if (!(v >= 1 && v <= 99)) { toast('Kies een doel tussen 1 en 99%.', 'err'); input.value = String(getCoreTarget()); return; }
+  if (v === getCoreTarget()) return;
+  store.set('pf_v4_core_target', String(v));
+  scheduleSync();
+  renderAll();
+  toast('Doel ingesteld op ' + v + '/' + (100 - v), 'ok');
 }
 
 function renderMilestoneList() {
@@ -1938,7 +2085,7 @@ function exportData() {
   const data = {
     app: 'Forge', format: 2, exportedAt: new Date().toISOString(),
     assets, monthly, nextId, milestones,
-    settings: {startHidden: store.get('pf_v4_start_hidden') === '1'},
+    settings: {startHidden: store.get('pf_v4_start_hidden') === '1', coreTarget: getCoreTarget()},
   };
   if ($('export-keys').checked) data.keys = {alphaVantage: getAvKey(), finnhub: getFhKey()};
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
@@ -1964,6 +2111,7 @@ function normalizeBackup(d) {
       id: Number.isInteger(a.id) ? a.id : 100000 + i,
       ticker: a.ticker.trim().toUpperCase(), name: str(a.name), type: a.type, qty: a.qty,
       avSym: str(a.avSym), cgId: str(a.cgId), buyPrice: numOrNull(a.buyPrice),
+      role: a.role === 'core' || a.role === 'satellite' ? a.role : null,
       price: numOrNull(a.price), rawP: numOrNull(a.rawP), rawC: manual ? 'EUR' : (a.rawC === 'USD' || a.rawC === 'EUR' ? a.rawC : null),
     };
   });
@@ -1980,6 +2128,7 @@ function normalizeBackup(d) {
     milestones: ms,
     keys: d.keys && typeof d.keys === 'object' ? {av: str(d.keys.alphaVantage), fh: str(d.keys.finnhub)} : null,
     startHidden: d.settings && typeof d.settings.startHidden === 'boolean' ? d.settings.startHidden : null,
+    coreTarget: d.settings && Number.isInteger(d.settings.coreTarget) && d.settings.coreTarget >= 1 && d.settings.coreTarget <= 99 ? d.settings.coreTarget : null,
   };
 }
 
@@ -2021,6 +2170,7 @@ function applyData(data) {
     if (data.keys.fh) store.set('pf_v4_finnhub', data.keys.fh);
   }
   if (data.startHidden !== null) store.set('pf_v4_start_hidden', data.startHidden ? '1' : '0');
+  if (data.coreTarget) store.set('pf_v4_core_target', String(data.coreTarget));
   persist();
   if (currentPage === 'settings') renderSettings();
   renderAll();
@@ -2060,6 +2210,7 @@ function canonAsset(a) {
   return {
     id: a.id, ticker: a.ticker, name: a.name || '', type: a.type, qty: a.qty,
     avSym: a.avSym || '', cgId: a.cgId || '', buyPrice: a.buyPrice ?? null,
+    role: roleOf(a),
     price: manual ? a.price ?? null : null, rawP: manual ? a.rawP ?? null : null, rawC: manual ? 'EUR' : null,
   };
 }
@@ -2069,7 +2220,7 @@ function syncPayload() {
     assets: assets.map(canonAsset),
     monthly: monthly.map(m => ({key: m.key, value: m.value})),
     nextId, milestones,
-    settings: {startHidden: store.get('pf_v4_start_hidden') === '1'},
+    settings: {startHidden: store.get('pf_v4_start_hidden') === '1', coreTarget: getCoreTarget()},
     keys: {alphaVantage: getAvKey(), finnhub: getFhKey()},
   };
 }
@@ -2388,7 +2539,16 @@ function bindEvents() {
 
   // Assets
   $('add-asset-btn').addEventListener('click', () => openAssetDialog());
-  $('f-type').addEventListener('change', toggleFields);
+  $('f-type').addEventListener('change', () => {
+    // Nieuwe asset: stel de rol voor op basis van het type (ETF → kern, rest → satelliet).
+    if (!editId) $('f-role').value = $('f-type').value === 'etf' ? 'core' : 'satellite';
+    toggleFields();
+  });
+  $('asset-delete').addEventListener('click', () => {
+    const id = editId;
+    closeAssetDialog();
+    deleteAsset(id);
+  });
   $('asset-cancel').addEventListener('click', closeAssetDialog);
   $('asset-save').addEventListener('click', saveAsset);
   $('asset-form').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); saveAsset(); } });
@@ -2411,6 +2571,8 @@ function bindEvents() {
   document.querySelectorAll('.js-test').forEach(b => b.addEventListener('click', () => testKey(b.dataset.provider, b)));
   $('save-keys-btn').addEventListener('click', saveKeys);
   $('ms-add-btn').addEventListener('click', addMilestone);
+  $('core-target').addEventListener('change', saveCoreTarget);
+  $('core-target').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
   $('ms-new').addEventListener('keydown', e => { if (e.key === 'Enter') addMilestone(); });
   $('start-hidden').addEventListener('change', e => {
     store.set('pf_v4_start_hidden', e.target.checked ? '1' : '0');
