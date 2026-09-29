@@ -826,7 +826,7 @@ select.input option{background:var(--c-surface)}
                 </div>
               </div>
               <div class="data-row">
-                <div class="data-text"><span class="data-title">Cache legen</span><span class="field-hint">Wist bewaarde dagkoersen van Alpha Vantage en opgeslagen logo's.</span></div>
+                <div class="data-text"><span class="data-title">Cache legen</span><span class="field-hint">Wist bewaarde koersen (Alpha Vantage en crypto) en opgeslagen logo's.</span></div>
                 <div class="data-actions"><button type="button" class="btn btn-secondary" id="clear-cache-btn">Cache legen</button></div>
               </div>
               <div class="data-row">
@@ -1263,39 +1263,74 @@ async function fetchEurRate() {
   } catch (e) {}
 }
 
-// Eén call voor prijs én logo.
+// CoinGecko zonder key staat maar een paar verzoeken per minuut toe (per internetverbinding).
+// Daarom: één verzoek voor alle koersen, logo's alleen als ze ontbreken, hooguit eens per
+// 5 minuten ophalen, en per coin de laatst bekende koers bewaren om op terug te vallen.
+const CG_MIN_INTERVAL = 5 * 60 * 1000;
+const cgUrl = (path, ids) => 'https://api.coingecko.com/api/v3/' + path + '&ids=' + encodeURIComponent(ids.join(','));
+
+// Laatst bekende koersen: {bitcoin: {price, t}, ...}. Alleen op dit apparaat, niet in de sync.
+function cgCache() { return store.json('pf_v4_cg_cache', {}) || {}; }
+function useCachedCrypto(list) {
+  const cache = cgCache();
+  let oldest = null;
+  list.forEach(a => {
+    const c = cache[a.cgId];
+    if (!c || typeof c.price !== 'number') return;
+    setPrice(a, c.price, 'EUR');
+    oldest = oldest == null ? c.t : Math.min(oldest, c.t);
+  });
+  return oldest;
+}
+
 async function fetchCrypto(warnings) {
   const list = assets.filter(a => a.type === 'crypto' && a.cgId);
   if (!list.length) return;
+  const ids = [...new Set(list.map(a => a.cgId))];
+  const cache = cgCache();
+  const now = Date.now();
+
+  // Net nog opgehaald? Dan de bewaarde koersen gebruiken en CoinGecko met rust laten.
+  const fresh = ids.every(id => cache[id] && now - cache[id].t < CG_MIN_INTERVAL);
+  if (fresh) { useCachedCrypto(list); return; }
+
   try {
-    const ids = [...new Set(list.map(a => a.cgId))].join(',');
-    const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=eur&per_page=250&ids=' + encodeURIComponent(ids), {signal: AbortSignal.timeout(10000)});
-    if (!r.ok) throw new Error(r.status === 429 ? 'te veel verzoeken, probeer het zo opnieuw' : 'HTTP ' + r.status);
+    const r = await fetch(cgUrl('simple/price?vs_currencies=eur', ids), {signal: AbortSignal.timeout(10000)});
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), {limit: r.status === 429 || r.status === 403});
+    const d = await r.json();
+    ids.forEach(id => { if (d[id] && typeof d[id].eur === 'number') cache[id] = {price: d[id].eur, t: now}; });
+    store.set('pf_v4_cg_cache', JSON.stringify(cache));
+    list.forEach(a => { if (d[a.cgId] && typeof d[a.cgId].eur === 'number') setPrice(a, d[a.cgId].eur, 'EUR'); });
+    const unknown = ids.filter(id => !d[id]);
+    if (unknown.length) warnings.push('CoinGecko kent ' + unknown.join(', ') + ' niet.');
+  } catch (e) {
+    // Limiet bereikt of geen verbinding (een blokkade van CoinGecko komt in de browser binnen als netwerkfout).
+    const since = useCachedCrypto(list);
+    const when = since ? ' (van ' + new Date(since).toLocaleString('nl-NL', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + ')' : '';
+    warnings.push(since
+      ? 'CoinGecko is even niet bereikbaar, laatst bekende cryptokoersen gebruikt' + when + '.'
+      : 'CoinGecko is even niet bereikbaar. Probeer het over een paar minuten opnieuw.');
+    return;
+  }
+
+  // Logo's: alleen voor coins zonder (geldig) logo. Mislukt dit, dan is dat niet erg.
+  const needLogo = ids.filter(id => {
+    const e = logos['cg:' + id];
+    return !e || now - e.t > (e.url ? LOGO_TTL_FOUND : LOGO_TTL_MISSING);
+  });
+  if (!needLogo.length) return;
+  try {
+    const r = await fetch(cgUrl('coins/markets?vs_currency=eur&per_page=250', needLogo), {signal: AbortSignal.timeout(10000)});
+    if (!r.ok) return;
     const d = await r.json();
     const byId = new Map((Array.isArray(d) ? d : []).map(c => [c.id, c]));
-    const now = Date.now();
-    list.forEach(a => {
-      const c = byId.get(a.cgId);
-      if (!c) return;
-      if (typeof c.current_price === 'number') setPrice(a, c.current_price, 'EUR');
-      if (typeof c.image === 'string' && c.image.startsWith('https://')) logos['cg:' + a.cgId] = {url: c.image, t: now};
+    needLogo.forEach(id => {
+      const c = byId.get(id);
+      const url = c && typeof c.image === 'string' && c.image.startsWith('https://') ? c.image : null;
+      logos['cg:' + id] = {url, t: now};
     });
     saveLogos();
-    // /coins/markets laat sommige kleine coins weg; die halen we via /simple/price (zonder logo).
-    let missing = list.filter(a => !byId.has(a.cgId));
-    if (missing.length) {
-      const ids2 = [...new Set(missing.map(a => a.cgId))].join(',');
-      const r2 = await fetch('https://api.coingecko.com/api/v3/simple/price?vs_currencies=eur&ids=' + encodeURIComponent(ids2), {signal: AbortSignal.timeout(10000)});
-      if (r2.ok) {
-        const d2 = await r2.json();
-        missing.forEach(a => { if (d2[a.cgId] && typeof d2[a.cgId].eur === 'number') setPrice(a, d2[a.cgId].eur, 'EUR'); });
-        missing = missing.filter(a => !(d2[a.cgId] && typeof d2[a.cgId].eur === 'number'));
-      }
-    }
-    if (missing.length) warnings.push('CoinGecko kent ' + missing.map(a => a.cgId).join(', ') + ' niet.');
-  } catch (e) {
-    warnings.push('CoinGecko: ' + e.message + '.');
-  }
+  } catch (e) {}
 }
 
 async function fetchOneAV(sym, key) {
@@ -2443,6 +2478,7 @@ async function initSync() {
 function clearCache() {
   store.keys().filter(k => k.startsWith('av_cache_')).forEach(k => store.remove(k));
   store.remove('pf_v4_logos');
+  store.remove('pf_v4_cg_cache');
   logos = {};
   renderAll();
   toast('Cache geleegd. Bij de volgende keer vernieuwen wordt alles opnieuw opgehaald.', 'ok');
