@@ -868,6 +868,7 @@ select.input option{background:var(--c-surface)}
     <label class="field" id="row-manual-val" hidden><span class="field-label">Waarde (€)</span><input class="input js-sensitive" id="f-manual-val" type="text" inputmode="decimal" autocomplete="off" placeholder="Bijv. 5000"><span class="field-hint">Totaalbedrag in euro. Wordt niet automatisch bijgewerkt.</span></label>
     <label class="field" id="row-av"><span class="field-label">Koerssymbool</span><input class="input input-mono" id="f-av" autocomplete="off" spellcheck="false" placeholder="Bijv. TSLA of VWCE.FRK">
       <span class="field-hint">US-aandelen (via Finnhub): gewone ticker, bijv. TSLA, META.<br>EU-ETF's (via Alpha Vantage): ticker + beurs, bijv. VWCE.FRK (Frankfurt), WQTM.DEX (XETRA), VWCE.AMS (Amsterdam).</span></label>
+    <label class="field" id="row-logo"><span class="field-label">Logo <span class="field-optional">· optioneel</span></span><input class="input input-mono" id="f-logo" autocomplete="off" spellcheck="false" placeholder="Bijv. vanguard.com of https://…/logo.png"><span class="field-hint">Een website (dan gebruikt Forge het websitelogo) of een directe link naar een afbeelding. Leeg laten = automatisch.</span></label>
     <label class="field" id="row-cg" hidden><span class="field-label">CoinGecko-ID</span><input class="input input-mono" id="f-cg" autocomplete="off" spellcheck="false" placeholder="Bijv. bitcoin, solana, ripple"><span class="field-hint">Staat in de URL van de coin op coingecko.com.</span></label>
     <div class="dialog-actions">
       <button type="button" class="btn btn-danger dialog-delete" id="asset-delete" hidden>Verwijderen</button>
@@ -1099,12 +1100,32 @@ function logoKey(a) {
   if ((a.type === 'stock' || a.type === 'etf') && a.avSym && !a.avSym.includes('.')) return 'fh:' + a.avSym;
   return null;
 }
+// ETF-uitgevers herkennen aan de naam, zodat een ETF zonder eigen logo het logo van de uitgever krijgt.
+const ISSUER_DOMAINS = [
+  ['vanguard', 'vanguard.com'], ['wisdomtree', 'wisdomtree.eu'], ['ishares', 'ishares.com'],
+  ['amundi', 'amundi.com'], ['xtrackers', 'dws.com'], ['spdr', 'ssga.com'],
+  ['invesco', 'invesco.com'], ['vaneck', 'vaneck.com'],
+];
+// Websitelogo (favicon) via Google: werkt zonder key voor elke website.
+const faviconUrl = domain => 'https://www.google.com/s2/favicons?sz=128&domain=' + encodeURIComponent(domain);
+
 function logoUrl(a) {
+  // 1. Zelf ingevuld in het formulier: een afbeeldingslink of een website.
+  const own = (a.logo || '').trim();
+  if (/^https:\/\//i.test(own)) return own;
+  if (own) return faviconUrl(own.replace(/^https?:\/\//i, '').split('/')[0]);
+  // 2. Opgehaald logo (Finnhub voor aandelen, CoinGecko voor overige coins).
   const k = logoKey(a);
   const e = k && logos[k];
   if (e && typeof e.url === 'string' && e.url.startsWith('https://')) return e.url;
-  // Bekende coins: vast icoon van een icoon-CDN, zonder API-verzoek. Laadt het niet, dan initialen.
+  // 3. Bekende coins: vast icoon van een icoon-CDN, zonder API-verzoek. Laadt het niet, dan initialen.
   if (a.type === 'crypto' && BINANCE_BASE[a.cgId]) return 'https://assets.coincap.io/assets/icons/' + BINANCE_BASE[a.cgId].toLowerCase() + '@2x.png';
+  // 4. ETF's: logo van de uitgever, herkend aan de naam.
+  if (a.type === 'etf') {
+    const name = (a.name || '').toLowerCase();
+    const hit = ISSUER_DOMAINS.find(([word]) => name.includes(word));
+    if (hit) return faviconUrl(hit[1]);
+  }
   return null;
 }
 function colorIndex(str) {
@@ -1676,13 +1697,18 @@ function renderCoreSat() {
   $('coresat-core').textContent = pct(corePct);
   $('coresat-sat').textContent = pct(100 - corePct);
 
-  // Bijkopen om op doel te komen, zonder iets te verkopen:
-  // (core + x) / (invested + x) = t  →  x = (t·invested − core) / (1 − t)
+  // Twee manieren om op doel te komen:
+  // - Verschuiven (verkopen en de opbrengst aan de andere kant beleggen): het totaal blijft gelijk,
+  //   dus je verschuift simpelweg het verschil: |t − kern%| · belegd.
+  // - Alleen bijkopen, zonder te verkopen: (core + x) / (invested + x) = t  →  x = (t·invested − core) / (1 − t).
+  //   Dat bedrag is veel groter, omdat de andere kant gelijk blijft en je totaal dus flink moet groeien.
   const t = target / 100;
+  const ratio = target + '/' + (100 - target);
+  const shift = Math.abs(diff) / 100 * invested;
   let status;
   if (Math.abs(diff) < 1) status = 'Op doel.';
-  else if (diff < 0) status = nf(-diff, 1, 1) + '% onder doel · koop ' + eur((t * invested - core) / (1 - t)) + ' kern bij om op ' + target + '/' + (100 - target) + ' te komen.';
-  else status = nf(diff, 1, 1) + '% boven doel · koop ' + eur(((1 - t) * invested - sat) / t) + ' satelliet bij om op ' + target + '/' + (100 - target) + ' te komen.';
+  else if (diff < 0) status = nf(-diff, 1, 1) + '% onder doel · verschuif ' + eur(shift) + ' van satelliet naar kern, of koop ' + eur((t * invested - core) / (1 - t)) + ' kern bij om op ' + ratio + ' te komen.';
+  else status = nf(diff, 1, 1) + '% boven doel · verschuif ' + eur(shift) + ' van kern naar satelliet, of koop ' + eur(((1 - t) * invested - sat) / t) + ' satelliet bij om op ' + ratio + ' te komen.';
   $('coresat-status').textContent = hidden ? MASK : status;
 }
 
@@ -1763,6 +1789,7 @@ function openAssetDialog(id) {
   $('f-manual-val').value = a && a.type === 'manual' && a.price != null ? nf(a.price, 0, 2) : '';
   $('f-av').value = a ? a.avSym || '' : '';
   $('f-cg').value = a ? a.cgId || '' : '';
+  $('f-logo').value = a ? a.logo || '' : '';
   $('f-role').value = a ? roleOf(a) || 'core' : 'core';
   $('asset-delete').hidden = !a;
   toggleFields();
@@ -1789,9 +1816,10 @@ function saveAsset() {
   if (type === 'crypto' && !cgId) { toast('Vul het CoinGecko-ID in.', 'err'); $('f-cg').focus(); return; }
 
   const role = $('f-role').value === 'satellite' ? 'satellite' : 'core';
+  const logo = $('f-logo').value.trim();
   const fields = type === 'manual'
-    ? {ticker, name, type, qty: 1, avSym: '', cgId: '', buyPrice: null, role: null, price: manualVal, rawP: manualVal, rawC: 'EUR'}
-    : {ticker, name, type, qty, avSym: type === 'crypto' ? '' : avSym, cgId: type === 'crypto' ? cgId : '', buyPrice, role, price: null, rawP: null, rawC: null};
+    ? {ticker, name, type, qty: 1, avSym: '', cgId: '', buyPrice: null, role: null, logo, price: manualVal, rawP: manualVal, rawC: 'EUR'}
+    : {ticker, name, type, qty, avSym: type === 'crypto' ? '' : avSym, cgId: type === 'crypto' ? cgId : '', buyPrice, role, logo, price: null, rawP: null, rawC: null};
 
   if (editId) Object.assign(assets.find(x => x.id === editId), fields);
   else assets.push({id: nextId++, ...fields});
@@ -2205,6 +2233,7 @@ function normalizeBackup(d) {
       id: Number.isInteger(a.id) ? a.id : 100000 + i,
       ticker: a.ticker.trim().toUpperCase(), name: str(a.name), type: a.type, qty: a.qty,
       avSym: str(a.avSym), cgId: str(a.cgId), buyPrice: numOrNull(a.buyPrice),
+      logo: str(a.logo),
       role: a.role === 'core' || a.role === 'satellite' ? a.role : null,
       price: numOrNull(a.price), rawP: numOrNull(a.rawP), rawC: manual ? 'EUR' : (a.rawC === 'USD' || a.rawC === 'EUR' ? a.rawC : null),
     };
@@ -2304,6 +2333,7 @@ function canonAsset(a) {
   return {
     id: a.id, ticker: a.ticker, name: a.name || '', type: a.type, qty: a.qty,
     avSym: a.avSym || '', cgId: a.cgId || '', buyPrice: a.buyPrice ?? null,
+    logo: a.logo || '',
     role: roleOf(a),
     price: manual ? a.price ?? null : null, rawP: manual ? a.rawP ?? null : null, rawC: manual ? 'EUR' : null,
   };
