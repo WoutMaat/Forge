@@ -1125,11 +1125,16 @@ function avatar(a, small = false) {
   return wrap;
 }
 function typeBadge(type) { return el('span', {class: 'badge badge-' + type, text: TYPE_LABEL[type] || type}); }
-// "117,09 × €169,64": aantal maal koers. Crypto krijgt meer decimalen (0,0718 BTC).
+// Amerikaanse aandelen noteren in dollars; die koers ken je van je broker, dus die tonen we.
+// Waarde en winst/verlies blijven in euro's (net als je aankoopprijs).
+const isUsd = a => a.type !== 'manual' && a.rawC === 'USD' && a.rawP > 0;
+const unitPrice = a => isUsd(a) ? usd(a.rawP) : unitEur(a.price);
+
+// "117,09 × €169,64" of "4,20 × $708,20": aantal maal koers. Crypto krijgt meer decimalen (0,0718 BTC).
 // Bij verbergen blijft de koers zichtbaar, het aantal niet.
 function tradeText(a) {
   if (a.type === 'manual' || a.price == null) return null;
-  return qtyText(a.qty, a.type === 'crypto' ? 6 : 2) + ' × ' + unitEur(a.price);
+  return qtyText(a.qty, a.type === 'crypto' ? 6 : 2) + ' × ' + unitPrice(a);
 }
 function assetCell(a, {badge = false, sub = null} = {}) {
   const trade = tradeText(a);
@@ -1145,8 +1150,9 @@ function assetCell(a, {badge = false, sub = null} = {}) {
 function priceCell(a) {
   if (a.price == null) return el('span', {class: 'muted', text: '—'});
   // Bij handmatige assets ís de koers de waarde, dus die wordt gemaskeerd.
-  const main = el('div', {text: a.type === 'manual' ? money(a.price) : unitEur(a.price)});
-  const sub = a.type !== 'manual' && a.rawC === 'USD' && a.rawP ? el('div', {class: 'cell-sub', text: usd(a.rawP)}) : null;
+  // Dollaraandelen: dollarkoers groot, eurokoers klein eronder.
+  const main = el('div', {text: a.type === 'manual' ? money(a.price) : unitPrice(a)});
+  const sub = isUsd(a) ? el('div', {class: 'cell-sub', text: unitEur(a.price)}) : null;
   return [main, sub];
 }
 function plCell(a) {
