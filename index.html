@@ -1474,8 +1474,19 @@ function applyT212(positions) {
     if (!p.ticker || !(p.quantity > 0)) return;
     seen.add(p.ticker);
     const short = t212Short(p.ticker);
-    let a = assets.find(x => x.t212 === p.ticker)
-      || assets.find(x => !x.t212 && (x.type === 'etf' || x.type === 'stock') && x.ticker.toUpperCase() === short.toUpperCase());
+    // Trading 212 gebruikt soms een oude interne ticker (Rocket Lab = "VACQ", Navitas = "LOKB").
+    // Daarom koppelen we niet alleen op ticker, maar ook op naam.
+    const sameName = x => (x.name || '').trim().toLowerCase() === (p.name || '').trim().toLowerCase() && !!p.name;
+    const unlinked = x => !x.t212 && (x.type === 'etf' || x.type === 'stock');
+    let a = assets.find(x => x.t212 === p.ticker);
+    const own = assets.find(x => unlinked(x) && (x.ticker.toUpperCase() === short.toUpperCase() || sameName(x)));
+    // Eerder automatisch aangemaakt (ticker = Trading 212-ticker) terwijl je eigen positie met dezelfde
+    // naam nog bestaat? Dan je eigen positie houden (ticker, logo, rol) en de dubbele weghalen.
+    if (a && own && a.ticker.toUpperCase() === short.toUpperCase() && own.ticker.toUpperCase() !== short.toUpperCase()) {
+      assets = assets.filter(x => x !== a);
+      a = own;
+    }
+    if (!a) a = own;
     if (!a) {
       a = {id: nextId++, ticker: short, name: p.name || short, type: /\b(etf|ucits)\b/i.test(p.name || '') ? 'etf' : 'stock',
            qty: 0, avSym: '', cgId: '', buyPrice: null, role: null, logo: ''};
