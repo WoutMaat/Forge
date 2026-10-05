@@ -443,6 +443,8 @@ select.input option{background:var(--c-surface)}
 @media (max-width:1023px){
   .dash-grid{grid-template-columns:minmax(0,1fr)}
   .cat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Op mobiel eerst de posities, dan de allocatie (zoals in Trading 212) */
+  .dash-grid > .card:first-child{order:2}
   .settings-section{grid-template-columns:minmax(0,1fr);gap:var(--space-3)}
 }
 @media (max-width:767px){
@@ -724,6 +726,20 @@ select.input option{background:var(--c-surface)}
               <p>Keys worden alleen in deze browser bewaard. Crypto werkt zonder key.</p>
             </div>
             <div class="card settings-card">
+              <div class="key-field">
+                <label class="toggle-row">
+                  <span class="toggle-text">
+                    <span class="field-title">Trading 212</span>
+                    <span class="field-hint">Neem je aandelen en ETF's automatisch over uit Trading 212: aantallen, aankoopprijs, koers en winst/verlies. Je key staat veilig als secret in Supabase, niet in deze app. Werkt alleen als je bent ingelogd.</span>
+                  </span>
+                  <input type="checkbox" class="switch" id="t212-enabled">
+                </label>
+                <div class="input-row">
+                  <button type="button" class="btn btn-secondary js-test" data-provider="t212">Test verbinding</button>
+                </div>
+                <p class="test-result" id="t212-result" role="status"></p>
+              </div>
+              <div class="divider"></div>
               <div class="key-field">
                 <div class="field-head">
                   <label class="field-title" for="fh-key">Finnhub</label>
@@ -1433,8 +1449,70 @@ async function fetchFinnhub(path, sym, key) {
   return r.json();
 }
 
-async function fetchStocks(warnings) {
-  const list = assets.filter(a => (a.type === 'etf' || a.type === 'stock') && a.avSym);
+// ── Trading 212 ──
+// Forge vraagt je posities op bij de Edge Function "t212-positions" in Supabase. Die functie bewaart
+// de Trading 212-key als secret en checkt eerst of je ingelogd bent; de key komt nooit in de browser.
+const t212Enabled = () => store.get('pf_v4_t212') === '1';
+// "VWCEd_EQ" → "VWCE", "IREN_US_EQ" → "IREN"
+const t212Short = t => String(t).split('_')[0].replace(/[a-z]+$/, '');
+
+async function callT212() {
+  const {data, error} = await sb.functions.invoke('t212-positions', {method: 'POST'});
+  if (error) {
+    let msg = error.message;
+    try { const body = await error.context.json(); if (body && body.error) msg = body.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  return (data && data.positions) || [];
+}
+
+// Neemt de posities over: bestaande assets worden gekoppeld (op ticker), nieuwe komen erbij,
+// en verkochte posities verdwijnen. Rol (kern/satelliet) en logo blijven zoals je ze instelde.
+function applyT212(positions) {
+  const seen = new Set();
+  positions.forEach(p => {
+    if (!p.ticker || !(p.quantity > 0)) return;
+    seen.add(p.ticker);
+    const short = t212Short(p.ticker);
+    let a = assets.find(x => x.t212 === p.ticker)
+      || assets.find(x => !x.t212 && (x.type === 'etf' || x.type === 'stock') && x.ticker.toUpperCase() === short.toUpperCase());
+    if (!a) {
+      a = {id: nextId++, ticker: short, name: p.name || short, type: /\b(etf|ucits)\b/i.test(p.name || '') ? 'etf' : 'stock',
+           qty: 0, avSym: '', cgId: '', buyPrice: null, role: null, logo: ''};
+      assets.push(a);
+    }
+    a.t212 = p.ticker;
+    if (!a.name) a.name = p.name || short;
+    if (/_US_EQ$/.test(p.ticker) && !a.avSym) a.avSym = short; // voor het logo (Finnhub) en als terugval
+    a.qty = p.quantity;
+    // Waarde en kosten in je accountvaluta (euro); zo komt de winst/verlies exact overeen met Trading 212.
+    const w = p.walletImpact || {};
+    const toEur = cur => (!cur || cur === 'EUR') ? 1 : cur === 'USD' ? eurRate : 1;
+    if (w.currentValue > 0) a.price = w.currentValue * toEur(w.currency) / p.quantity;
+    else if (p.currentPrice > 0) a.price = p.currentPrice * toEur(p.currency);
+    if (w.totalCost > 0) a.buyPrice = w.totalCost * toEur(w.currency) / p.quantity;
+    else if (p.averagePricePaid > 0) a.buyPrice = p.averagePricePaid * toEur(p.currency);
+    a.rawP = p.currentPrice;
+    a.rawC = p.currency || 'EUR';
+  });
+  // Verkochte posities verwijderen (niet bij een lege lijst, voor het geval Trading 212 even niets teruggeeft).
+  if (seen.size) assets = assets.filter(a => !a.t212 || seen.has(a.t212));
+}
+
+async function fetchT212(warnings) {
+  if (!sb || !syncUser || !t212Enabled()) return false;
+  try {
+    applyT212(await callT212());
+    return true;
+  } catch (e) {
+    warnings.push('Trading 212: ' + e.message);
+    return false;
+  }
+}
+
+async function fetchStocks(warnings, t212Ok = false) {
+  // Posities die uit Trading 212 komen hebben hun koers al; die slaan we hier over.
+  const list = assets.filter(a => (a.type === 'etf' || a.type === 'stock') && a.avSym && !(t212Ok && a.t212));
   const euList = list.filter(a => EU_SUFFIX.test(a.avSym));
   const usList = list.filter(a => !a.avSym.includes('.'));
   const avKey = getAvKey(), fhKey = getFhKey();
@@ -1519,7 +1597,8 @@ async function loadAll() {
   const warnings = [];
   try {
     await fetchEurRate();
-    await Promise.allSettled([fetchCrypto(warnings), fetchStocks(warnings)]);
+    const t212Ok = await fetchT212(warnings);
+    await Promise.allSettled([fetchCrypto(warnings), fetchStocks(warnings, t212Ok)]);
   } finally {
     loading = false;
     btn.disabled = false;
@@ -1725,7 +1804,7 @@ function renderPositions() {
 function renderAssetsTable() {
   $('assets-count').textContent = plural(assets.length, 'asset', 'assets');
   const rows = byValue().map(a => {
-    const sym = a.type === 'crypto' ? a.cgId : a.type === 'manual' ? '' : a.avSym;
+    const sym = a.t212 ? 'Trading 212' : a.type === 'crypto' ? a.cgId : a.type === 'manual' ? '' : a.avSym;
     // De hele rij opent het wijzigformulier: op de telefoon zijn de knoppen verborgen.
     const open = () => openAssetDialog(a.id);
     const stop = fn => e => { e.stopPropagation(); fn(); };
@@ -2098,6 +2177,7 @@ function renderSettings() {
   $('av-key').value = getAvKey();
   $('start-hidden').checked = store.get('pf_v4_start_hidden') === '1';
   $('core-target').value = String(getCoreTarget());
+  $('t212-enabled').checked = t212Enabled();
   renderMilestoneList();
   refreshIcons();
 }
@@ -2163,7 +2243,22 @@ function setTestResult(id, state, text) {
   out.classList.toggle('is-loading', state === 'loading');
   refreshIcons();
 }
+
+async function testT212(btn) {
+  if (!sb || !syncUser) { setTestResult('t212-result', 'err', 'Log eerst in bij Account & sync.'); return; }
+  btn.disabled = true;
+  setTestResult('t212-result', 'loading', 'Verbinding testen…');
+  try {
+    const positions = await callT212();
+    setTestResult('t212-result', 'ok', 'Verbinding werkt: ' + plural(positions.length, 'positie', 'posities') + ' gevonden.');
+  } catch (e) {
+    setTestResult('t212-result', 'err', e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
 async function testKey(provider, btn) {
+  if (provider === 't212') return testT212(btn);
   const fh = provider === 'finnhub';
   const key = $(fh ? 'fh-key' : 'av-key').value.trim();
   const out = fh ? 'fh-result' : 'av-result';
@@ -2207,7 +2302,7 @@ function exportData() {
   const data = {
     app: 'Forge', format: 2, exportedAt: new Date().toISOString(),
     assets, monthly, nextId, milestones,
-    settings: {startHidden: store.get('pf_v4_start_hidden') === '1', coreTarget: getCoreTarget()},
+    settings: {startHidden: store.get('pf_v4_start_hidden') === '1', coreTarget: getCoreTarget(), t212: t212Enabled()},
   };
   if ($('export-keys').checked) data.keys = {alphaVantage: getAvKey(), finnhub: getFhKey()};
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
@@ -2234,6 +2329,7 @@ function normalizeBackup(d) {
       ticker: a.ticker.trim().toUpperCase(), name: str(a.name), type: a.type, qty: a.qty,
       avSym: str(a.avSym), cgId: str(a.cgId), buyPrice: numOrNull(a.buyPrice),
       logo: str(a.logo),
+      t212: str(a.t212),
       role: a.role === 'core' || a.role === 'satellite' ? a.role : null,
       price: numOrNull(a.price), rawP: numOrNull(a.rawP), rawC: manual ? 'EUR' : (a.rawC === 'USD' || a.rawC === 'EUR' ? a.rawC : null),
     };
@@ -2252,6 +2348,7 @@ function normalizeBackup(d) {
     keys: d.keys && typeof d.keys === 'object' ? {av: str(d.keys.alphaVantage), fh: str(d.keys.finnhub)} : null,
     startHidden: d.settings && typeof d.settings.startHidden === 'boolean' ? d.settings.startHidden : null,
     coreTarget: d.settings && Number.isInteger(d.settings.coreTarget) && d.settings.coreTarget >= 1 && d.settings.coreTarget <= 99 ? d.settings.coreTarget : null,
+    t212: d.settings && typeof d.settings.t212 === 'boolean' ? d.settings.t212 : null,
   };
 }
 
@@ -2294,6 +2391,7 @@ function applyData(data) {
   }
   if (data.startHidden !== null) store.set('pf_v4_start_hidden', data.startHidden ? '1' : '0');
   if (data.coreTarget) store.set('pf_v4_core_target', String(data.coreTarget));
+  if (data.t212 !== null && data.t212 !== undefined) store.set('pf_v4_t212', data.t212 ? '1' : '0');
   persist();
   if (currentPage === 'settings') renderSettings();
   renderAll();
@@ -2334,6 +2432,7 @@ function canonAsset(a) {
     id: a.id, ticker: a.ticker, name: a.name || '', type: a.type, qty: a.qty,
     avSym: a.avSym || '', cgId: a.cgId || '', buyPrice: a.buyPrice ?? null,
     logo: a.logo || '',
+    t212: a.t212 || '',
     role: roleOf(a),
     price: manual ? a.price ?? null : null, rawP: manual ? a.rawP ?? null : null, rawC: manual ? 'EUR' : null,
   };
@@ -2344,7 +2443,7 @@ function syncPayload() {
     assets: assets.map(canonAsset),
     monthly: monthly.map(m => ({key: m.key, value: m.value})),
     nextId, milestones,
-    settings: {startHidden: store.get('pf_v4_start_hidden') === '1', coreTarget: getCoreTarget()},
+    settings: {startHidden: store.get('pf_v4_start_hidden') === '1', coreTarget: getCoreTarget(), t212: t212Enabled()},
     keys: {alphaVantage: getAvKey(), finnhub: getFhKey()},
   };
 }
@@ -2710,6 +2809,12 @@ function bindEvents() {
     const f = e.target.files && e.target.files[0];
     e.target.value = '';
     if (f) importFile(f);
+  });
+  $('t212-enabled').addEventListener('change', e => {
+    store.set('pf_v4_t212', e.target.checked ? '1' : '0');
+    scheduleSync();
+    toast(e.target.checked ? 'Trading 212 gekoppeld: posities worden overgenomen' : 'Trading 212-koppeling uitgezet');
+    if (e.target.checked) loadAll();
   });
   $('clear-cache-btn').addEventListener('click', clearCache);
   $('reset-btn').addEventListener('click', resetAll);
